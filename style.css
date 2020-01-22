@@ -234,9 +234,7 @@ a:hover {
 
 .post .title a {
 	border: none;
-	/*
-	text-transform: lowercase;
-	*/
+	font-size: 32px;
 	color: #3A4648;
 }
 
