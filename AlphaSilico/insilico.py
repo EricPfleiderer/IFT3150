@@ -88,5 +88,32 @@ class Params:
 
     # virtual_patient_parameter_input = sio.loadmat('16052019VirtualPopulation300PatientParameters.mat')['VirtualPatientParameters']  # shape 254x302. absolute path, better way ?
 
-    print(N)
-
+    def model_input(self):
+        return [self.a1,
+                self.a1_R,
+                self.a2,
+                self.a2_R,
+                self.alpha,
+                self.C12,
+                self.C_prod_homeo,
+                self.C_prod_max,
+                self.d1,
+                self.d1_R,
+                self.d2,
+                self.d2_R,
+                self.d3_hat,
+                self.delta,
+                self.eta12,
+                self.gamma_P,
+                self.kappa,
+                self.Kcp,
+                self.k_elim,
+                self.kp,
+                self.kq,
+                self.ks,
+                self.N,
+                self.nu,
+                self.omega,
+                self.P12,
+                self.transit_rate
+                ]
