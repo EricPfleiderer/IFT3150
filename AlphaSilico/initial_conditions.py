@@ -1,3 +1,5 @@
+import numpy as np
+
 ##% Fitness function
 #function [Obj] = Updated16052019TreatmentOptimizerObjective(x,PA)   
 ## Time interval
@@ -37,24 +39,24 @@ def init_cond(PA):
     """
     :param PA: Params class
     """
-	TotalTime = 1/PA.a1 +1/(PA.a2+PA.d2)+PA.tau;
-	PA.TotalCells = 200;
-	# Initial Conditions
-	QIC = (1/PA.a1 / TotalTime) * PA.TotalCells * (1 - PA.nu); #100;
-	SIC = (1/(PA.a2 + PA.d2) / TotalTime) * PA.TotalCells * (1 - PA.nu);  #100;
-	TCIC = (PA.tau / TotalTime) * PA.TotalCells * (1 - PA.nu)* ones(1, PA.N) / PA.N; #Transit compartment ICs
-	NCIC = (PA.tau / TotalTime) * PA.TotalCells * (1 - PA.nu);
-	IIC = 0;
-	VIC = 0;
-	CIC =  PA.CprodHomeo / PA.kel;
-	PIC =   PA.Kcp * CIC / ((PA.P12 + CIC) * PA.gammaP);
-	# Resistant Strain ICs
-	RIC =   (1/PA.a1 / TotalTime) * PA.TotalCells * (PA.nu); #
-	RSIC =   (1/(PA.a2 + PA.d2) / TotalTime) * PA.TotalCells * (PA.nu); #
-	ResistantTCIC =   (PA.tau / TotalTime) * PA.TotalCells * (PA.nu) * ones(1, PA.N) / PA.N; 
-	ResistantTotalCellsIC = (PA.tau / TotalTime) * PA.TotalCells * (PA.nu);
-	InitialConditions = [QIC, SIC, IIC, VIC, TCIC, CIC, PIC, NCIC, RIC, RSIC, ResistantTCIC, ResistantTotalCellsIC];
-        return InitialConditions
+    TotalTime = 1/PA.a1 +1/(PA.a2+PA.d2)+PA.tau
+    PA.TotalCells = 200
+    # Initial Conditions
+    QIC = (1/PA.a1 / TotalTime) * PA.total_cells * (1 - PA.nu) #100;
+    SIC = (1/(PA.a2 + PA.d2) / TotalTime) * PA.total_cells * (1 - PA.nu)  #100;
+    TCIC = (PA.tau / TotalTime) * PA.total_cells * (1 - PA.nu) * np.ones((1, PA.N)) / PA.N #Transit compartment ICs
+    NCIC = (PA.tau / TotalTime) * PA.total_cells * (1 - PA.nu)
+    IIC = 0
+    VIC = 0
+    CIC =  PA.C_prod_homeo / PA.kel
+    PIC =   PA.Kcp * CIC / ((PA.P12 + CIC) * PA.gammaP)
+    # Resistant Strain ICs
+    RIC =   (1/PA.a1 / TotalTime) * PA.total_cells * (PA.nu) #
+    RSIC =   (1/(PA.a2 + PA.d2) / TotalTime) * PA.total_cells * (PA.nu) #
+    ResistantTCIC =   (PA.tau / TotalTime) * PA.total_cells * (PA.nu) * np.ones((1, PA.N)) / PA.N 
+    ResistantTotalCellsIC = (PA.tau / TotalTime) * PA.total_cells * (PA.nu)
+    InitialConditions = [QIC, SIC, IIC, VIC, TCIC, CIC, PIC, NCIC, RIC, RSIC, ResistantTCIC, ResistantTotalCellsIC]
+    return InitialConditions
         
 ## Solve the distributed DDE
 #[solTreat] = WaresDistributedImmunityResistantSolver(totaltime,InitialConditions,PA); #Calculate death time with viral treatment
