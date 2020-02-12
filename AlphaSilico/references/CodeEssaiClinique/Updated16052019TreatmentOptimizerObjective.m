@@ -82,35 +82,47 @@ sol = ode15s(@ViralOncologyParameterFit,totaltime,IC,opts);
 function dydt = ViralOncologyParameterFit(t,y,Z);
 % ylag1 = Z(:,1);
 % Sbar = (PA.TransitRate./PA.a2).*y(PA.N+4); 
+
 %Quiescent cells
 dydt(1) = 2.*(1-PA.nu).*PA.TransitRate.*y(PA.N+4)-(PA.a1+PA.d1+ psiQ(y(PA.N+6),y(1),PA) ).*y(1); 
+
 %G1 Cells
 dydt(2) = PA.a1.*y(1)-( PA.a2+PA.d2+ PA.kappa.*Infection(y(4),PA)+ psiS(y(PA.N+6),y(2),PA) ).*y(2); 
+
 %Infected Cells
 dydt(3) =  -PA.delta.*y(3)+ PA.kappa.*Infection(y(4),PA).*(y(2)+y(PA.N+7)+y(PA.N+9)+y(PA.N+PA.N+10) ); % PA.kappa.*Infection(y(1),y(2)+Sbar,y(3),y(4),PA).*(y(2)+Sbar); % Infected cells
+
 %Virions
 dydt(4) =   ViralDose(PA,t) + PA.alpha.*PA.delta.*y(3)-PA.omega.*y(4)- PA.kappa.*Infection(y(4),PA).*(y(2)+y(PA.N+7)+y(PA.N+9)+y(PA.N+PA.N+10)); % PA.kappa.*Infection(y(1),y(2)+Sbar,y(3),y(4),PA ).*(y(2)+Sbar); % Virions
+
 %Writing ODE for first transit compartment
  dydt(5) = PA.a2.*y(2) - PA.TransitRate.*y(5) - ( PA.d3Hat+PA.kappa.*Infection(y(4),PA) + psiS(y(PA.N+6),y(5),PA) ).*y(5);
 for jj = 6:PA.N+4
     dydt(jj) = PA.TransitRate.*(y(jj-1)-y(jj)) - ( PA.d3Hat +PA.kappa.*Infection(y(4),PA) + psiS(y(PA.N+6),y(jj),PA) ).*y(jj); %Transit compartment ODEs
 end
-%Immune cytokine 
+
+%Immune cytokine
 dydt(PA.N+5) =    CProd( psiS(y(PA.N+6),y(2),PA).*y(2)+PA.delta.*y(3)+psiQ(y(PA.N+6),y(1),PA).*y(1),PA) - PA.kel.*y(PA.N+5)+Dose(PA,t); 
+
 %Phagocytes
 dydt(PA.N+6) =   PA.Kcp.*y(PA.N+5)./(PA.P12+y(PA.N+5)) - PA.gammaP.*y(PA.N+6); 
+
 %ODE for total number of cells in cell cycle
 dydt(PA.N+7) = PA.a2.*y(2) - (PA.d3Hat+PA.kappa.*Infection(y(4),PA)+psiS(y(PA.N+6),y(2),PA) ).*y(PA.N+7) - (PA.TransitRate./PA.a2).*y(PA.N+4);
+
 % Resistant compartments
 %Resistant Quiescent
 dydt(PA.N+8) =   2.*PA.nu.*PA.TransitRate.*y(PA.N+4) + 2.*PA.TransitRate.*y(PA.N+PA.N+9)-(PA.a1R+PA.d1R).*y(PA.N+8); %Resistant quiescence DDE
+
 %Resistant G1
 dydt(PA.N+9) =   PA.a1R.*y(PA.N+8)-(PA.a2R+PA.d2R+ PA.kappa.*Infection(y(4),PA) ).*y(PA.N+9); %Susceptible resistant cells
+
 %Resistant First transit
 dydt(PA.N+10) =  PA.a2R.*y(PA.N+9) - PA.TransitRate.*y(PA.N+10) - (PA.d3HatR+PA.kappa.*Infection(y(4),PA)).*y(PA.N+10); %Susceptible resistant first compartment
 for jj = PA.N+11:PA.N+PA.N+9
     dydt(jj) =  PA.TransitRate.*(y(jj-1)-y(jj)) - (PA.d3HatR +PA.kappa.*Infection(y(4),PA)  ).*y(jj); %Resistant Transit compartment ODEs
 end
+
 %DE for total resistant cells
 dydt(PA.N+PA.N+10) =   PA.a2.*y(PA.N+9) - (PA.d3Hat+PA.kappa.*Infection(y(4),PA) ).*y(PA.N+PA.N+10) - (PA.TransitRate./PA.a2).*y(PA.N+PA.N+9);
 dydt = dydt';

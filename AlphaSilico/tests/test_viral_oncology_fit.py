@@ -1,5 +1,5 @@
-import AlphaSilico.viral_oncology_fit as vof
-from AlphaSilico.insilico import Params as P
+import AlphaSilico.src.viral_oncology_fit as vof
+from AlphaSilico.src.insilico import Params as P
 from scipy.integrate import ode
 
 def test_fit():
