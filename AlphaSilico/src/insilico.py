@@ -157,10 +157,10 @@ class TumorModel:
 
         """
 
-        :param t_start: Float. Time at the start of the simulation.
-        :param t_end:  Float. Time at the end of the simulation.
+        :param t_start: Float. Time at the start of the simulation. Included.
+        :param t_end:  Float. Time at the end of the simulation. Excluded.
         :param dt: Float. Time step.
-        :return: Simulation history.
+        :return: Simulation history. Includes initial conditions as first entry.
         """
 
         r = ode(self.f_eval).set_integrator('zvode')  # Initialize the integrator
@@ -168,7 +168,7 @@ class TumorModel:
 
         history = np.array(self.initial_conditions)
 
-        while r.successful() and r.t < t_end:
+        while r.successful() and r.t < t_end - dt:
             r.integrate(r.t + dt)
             history = np.vstack((history, np.real(r.y)))
 
