@@ -6,16 +6,13 @@ from scipy.integrate import ode, cumtrapz
 
 class ClinicalTrial:
 
-    def __init__(self, patients, treatment_duration=3, viral_offset=7/30, immune_offset=1/30):
+    def __init__(self, patients, viral_treatment, immune_treatment, viral_offset=7/30, immune_offset=1/30):
         """
-
         :param patients: (n, 7) ndarray. Rows correspond to patients and columns correspond to variable parameters.
-        :param treatment_duration: Float. Length of treatment in months (3 months by default).
         :param viral_offset:  Float. Virotherapy offset (every 7 days by default).
         :param immune_offset: Float. Immunotherapy off set (every day by default).
         """
 
-        self.treatment_duration = treatment_duration
         self.viral_offset = viral_offset
         self.immune_offset = immune_offset
         self.patients = patients
@@ -156,7 +153,7 @@ class TumorModel:
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt, dA1_dt] + dAi_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt, dA1R_dt] + dAiR_dt + [dNR_dt]
 
-    def simulate(self, t_start=0, t_end=3, dt=1/30):
+    def simulate(self, immune_treatment, viral_treatment, t_start=0, t_end=3, dt=1/30):
 
         """
 
