@@ -1,18 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from AlphaSilico.src.insilico import TumorModel
+from AlphaSilico.src.insilico import ClinicalTrial, TumorModel
+import scipy.io as sio
+import pandas as pd
 
-model = TumorModel()
+# virtual_patient_parameter_input = np.transpose(sio.loadmat('references/CodeEssaiClinique/16052019VirtualPopulation300PatientParameters.mat')['VirtualPatientParameters'])  # shape
+# 254x302.
 
-t0 = 0
-t1 = 10
-dt = 0.1
+virtual_cohort = pd.read_csv('data/virtual_cohort.csv')
 
-time = np.arange(t0, t1 + dt, dt)
+trial = ClinicalTrial(patients=virtual_cohort.to_numpy())
 
-history = model.simulate(t0, t1, dt)
+x=10
 
-for col in range(history.shape[1]):
-    plt.figure()
-    plt.plot(time, history[:, col])
-    plt.savefig('outputs/history'+str(col)+'.png')
+
