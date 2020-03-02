@@ -34,21 +34,22 @@ class TumorModel:
     viral_admin = 250
     viral_kabs = 20 * 30  # Absorbtion rate
     viral_availability = 1
-
-    # Constants
-    intermitotic_SD = 6.7 / 24 / 30
     kappa = 3.534412642851458 * 30  # Virion contact rate
     delta = 4.962123414821151 * 30  # Lysis rate
     alpha = 0.008289097649957  # Lytic virion release rate
     omega = 9.686308020782763 * 30  # Virion death rate
     eta12 = 0.510538277701167  # Virion half effect concentration
+
+    # Cytokine parameters
     C_prod_homeo = 0.00039863 * 30  # Homeostatic cytokine production rate
     C_prod_max = 1.429574637713578 * 30  # Maximal cytokine production rate
     C12 = 0.739376299393775 * 30  # Maximal cytokine production rate
     k_elim = 0.16139 * 30  # Cytokine elimination rate
+
+    # Constants
+    intermitotic_SD = 6.7 / 24 / 30
     P12 = 5  # Cytokine production half effect
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
-    C_star = C_prod_homeo / k_elim
 
     def __init__(self, immunotherapy_doses, virotherapy_doses, a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
                  kp=0.05*30, kq=10, k_cp=4.6754*30):
@@ -66,13 +67,16 @@ class TumorModel:
         self.kp = kp
         self.kq = kq
         self.ks = kq
-        self.k_cp = k_cp  # Maximal phagocyte production rate
+        self.k_cp = k_cp
 
         # Distribution specific parameters
-        self.N = int(self.tau**2 / self.intermitotic_SD**2)
-        self.k_tr = self.N / self.tau  # Transit rate across compartments
-        self.d3_hat = self.N / self.tau * (math.exp(self.d3 * self.tau / (self.N + 1)) - 1)
+        self.j = round(self.tau**2 / self.intermitotic_SD**2)
+        self.k_tr = self.j / self.tau  # Transit rate across compartments
+        self.d3_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)
         self.d3_hat_R = self.d3_hat
+
+        # Immune steady state
+        self.C_star = self.C_prod_homeo / self.k_elim
         self.P_star = (1 / self.gamma_P) * (self.k_cp * self.C_star / (self.P12 + self.C_star))
 
         # Resistant parameters
@@ -89,21 +93,19 @@ class TumorModel:
         self.total_cells = 200
 
         # Initial conditions
-        QIC = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
-        SIC = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
-        TCIC = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(shape=self.N) / self.N  # Transit
-        NCIC = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
-        IIC = 0  # Infected cells
-        VIC = 0  # Virions
-        CIC = self.C_prod_homeo / self.k_elim  # Cytokines
-        PIC = k_cp * CIC / ((self.P12 + CIC) * self.gamma_P)  # Phagocytes
-        RIC = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
-        RSIC = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
-        resistant_TCIC = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(shape=self.N) / self.N  # Resistant transit
-        resistant_total_cells_IC = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cyle
-        self.initial_conditions = [QIC, SIC, IIC, VIC] + TCIC.tolist() + [CIC, PIC, NCIC, RIC, RSIC] + resistant_TCIC.tolist() + [resistant_total_cells_IC]
-
-    # [QIC, SIC, IIC, VIC, TCIC, CIC, PIC, NCIC, RIC, RSIC, ResistantTCIC, ResistantTotalCellsIC]
+        Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
+        G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
+        I = 0  # Infected cells
+        V = 0  # Virions
+        A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
+        N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
+        C = self.C_prod_homeo / self.k_elim  # Cytokines
+        P = self.k_cp * C / ((self.P12 + C) * self.gamma_P)  # Phagocytes
+        QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
+        G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
+        AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
+        NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
+        self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
     def immune_dose(self, t):
         if int(t*30) % int(self.immune_offset*30) == 0:
@@ -118,17 +120,16 @@ class TumorModel:
         return 0
 
     def evaluate_derivatives(self, t, y):
-        
-        # N ambiguity (total cells in cycle)
 
         """
         :param t: Float. Current time value.
         :param y: 1D list. Previous solution.
         :return: 1D list. Derivative of each quantity in y at time step t.
         """
-        Q, G1, I, V, A1, Ai, C, P, N, QR, G1R, A1R, AiR, NR = y[0], y[1], y[2], y[3], y[4], y[5:self.N+3], y[self.N+4],\
-                                                              y[self.N+5], y[self.N+6], y[self.N+7], y[self.N+8], \
-                                                              y[self.N+9], y[self.N+10:2*self.N+8], y[2*self.N+9]
+
+        Q, G1, I, V, A, C, P, N, QR, G1R, AR, NR = y[0], y[1], y[2], y[3], y[4:self.j + 4], y[self.j + 4], \
+                                                   y[self.j + 5], y[self.j + 6], y[self.j + 7], y[self.j + 8], \
+                                                   y[self.j + 9:2 * self.j + 9], y[2 * self.j + 9]
 
         infection = 0
         if y[3] > 1e-10:
@@ -141,7 +142,7 @@ class TumorModel:
         C_prod = self.C_prod_homeo + (self.C_prod_max - self.C_prod_homeo) * (a / self.C12 + a)
 
         # Quiescent cells, y[0]
-        dQ_dt = 2 * (1 - self.nu) * self.k_tr * Ai[-1] - (self.a1 + self.d1 + psi_Q) * Q
+        dQ_dt = 2 * (1 - self.nu) * self.k_tr * A[-1] - (self.a1 + self.d1 + psi_Q) * Q
 
         # G1 cells, y[1]
         dG1_dt = self.a1 * Q - (self.a2 + self.d2 + psi_G + eta) * G1
@@ -152,43 +153,41 @@ class TumorModel:
         # Virions, y[3]
         dV_dt = self.alpha * self.delta * I - self.omega * V - eta * (G1 + N)  # + self.viral_dose(t)
 
-        # First compartment, y[4]
-        dA1_dt = self.a2 * G1 - self.k_tr * A1 - (self.d3_hat + eta + psi_G) * A1
+        # Transit compartments, y[4], ..., y[j+3]
+        dA1_dt = self.a2 * G1 - self.k_tr * A[1] - (self.d3_hat + eta + psi_G) * A[1]
 
-        # ODE for transit compartments, y[5], ..., y[N+3]
-        dAi_dt = []
-        for j in range(5, self.N+4):
-            dAj_dt = self.k_tr * (y[j-1] - y[j]) - (self.d3_hat + eta + psi_G) * y[j]
-            dAi_dt.append(dAj_dt)
+        dA_dt = [dA1_dt]
+        for i in range(1, self.j):
+            dAi_dt = self.k_tr * (A[i-1] - A[i]) - (self.d3_hat + eta + psi_G) * A[i]
+            dA_dt.append(dAi_dt)
 
-        # Immune cytokine, y[N+4]
+        # Immune cytokine, y[j+4]
         dC_dt = C_prod - self.k_elim * C  # + self.immune_dose(t)
 
-        # Phagocytes, y[N+5]
+        # Phagocytes, y[j+5]
         dP_dt = self.k_cp * C / (self.C12 + C) - self.gamma_P * P  # DIFFERENCE BETWEEN MATLAB (P12) CODE AND S.I (C12).
 
-        # Total number of cells in cycle, y[N+6]
-        dN_dt = self.a2 * G1 - (self.d3_hat + eta + psi_G) * N - (self.k_tr / self.a2) * Ai[-1]  # Doesnot appear in SI
+        # Total number of cells in cycle, y[j+6]
+        dN_dt = self.a2 * G1 - (self.d3_hat + eta + psi_G) * N - (self.k_tr / self.a2) * A[-1]  # Doesnot appear in SI
 
-        # Resistant quiescent cells, y[N+7]
-        dQR_dt = 2 * self.nu * self.k_tr * Ai[-1] + 2 * self.k_tr * AiR[-1] - (self.a1_R + self.d1_R) * QR
+        # Resistant quiescent cells, y[j+7]
+        dQR_dt = 2 * self.nu * self.k_tr * A[-1] + 2 * self.k_tr * AR[-1] - (self.a1_R + self.d1_R) * QR
 
-        # Resistant G1 cells, y[N+8]
+        # Resistant G1 cells, y[j+8]
         dG1R_dt = self.a1_R * QR - (self.a2_R + self.d2_R + eta) * G1R
 
-        # Resistant first transit, y[N+9]
-        dA1R_dt = self.a2_R * G1R - self.k_tr * A1R - (self.d3_hat + eta + psi_G) * A1R  # DIFFERENCE
+        # Resistant transit compartments, y[j+9], ..., y[2*j+8]
+        dA1R_dt = self.a2 * G1 - self.k_tr * AR[1] - (self.d3_hat + eta + psi_G) * AR[1]
 
-        # DE for resistant transit compartments, y[N+10], ..., y[2*N+8]
-        dAiR_dt = []
-        for j in range(self.N+10, 2*self.N+9):
-            dAjR_dt = self.k_tr * (y[j - 1] - y[j]) - (self.d3_hat + eta + psi_G) * y[j]  # DIFFERENCE
-            dAiR_dt.append(dAjR_dt)
+        dAR_dt = [dA1R_dt]
+        for i in range(1, self.j):
+            dAi_dt = self.k_tr * (AR[i - 1] - AR[i]) - (self.d3_hat + eta + psi_G) * AR[i]
+            dAR_dt.append(dAi_dt)
 
-        # Total number of resistant cells in cyle, y[2*N+9]
-        dNR_dt = self.a2 * G1R - (self.d3_hat + eta) * NR - (self.k_tr / self.a2) * y[2*self.N+9]  # DOES NOT APPEAR IN SI
+        # Total number of resistant cells in cyle, y[2*j+9]
+        dNR_dt = self.a2 * G1R - (self.d3_hat + eta) * NR - (self.k_tr / self.a2) * y[2*self.j+9]  # DOES NOT APPEAR IN SI
 
-        return [dQ_dt, dG1_dt, dI_dt, dV_dt, dA1_dt] + dAi_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt, dA1R_dt] + dAiR_dt + [dNR_dt]
+        return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
     def simulate(self, t_start=0, t_end=3, dt=1/30, nsteps=10000):
 
@@ -221,12 +220,12 @@ class TumorModel:
 
     def f_obective(self, history):
 
-        # F(Dose) = Cumulative Tumor Burden + Cumulative Dose
+        # TO DO: Add cumulative dose burden
 
-        non_resistant_cycle = history['y'][:, 0] + history['y'][:, 1] + history['y'][:, self.N+6]  # Q, G1 and T
-        resistant_cycle = history['y'][:, self.N+7] + history['y'][:, self.N+8] + history['y'][:, 2*self.N+9]  # QR, G1R and TR
-        tumor_burden = non_resistant_cycle + resistant_cycle + history['y'][:, 2]
+        non_resistant_cycle = history['y'][:, 0] + history['y'][:, 1] + history['y'][:, self.j+6]  # Q, G1 and N
+        resistant_cycle = history['y'][:, self.j+7] + history['y'][:, self.j+8] + history['y'][:, 2*self.j+9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + history['y'][:, 2]
 
-        cumulative_tumor_burden = cumtrapz(y=tumor_burden, x=None, dx=history['dt'])  # Cumulative integral of tumor size
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=history['dt'])  # Cumulative integral of tumor size
 
-        return cumulative_tumor_burden[-1]
+        return tumor_size, cumulative_tumor_burden
