@@ -31,6 +31,36 @@ Released   : 20110923
 		<div id="content">
 
 			<div class="post">
+				<h2 class="title"><a href="#">Analyse des résultats et période débuggage</a></h2>
+				<p class="meta"><span class="date">2 mars 2020</span>
+				<div style="clear: both;">&nbsp;</div>
+				<div class="entry">
+
+					<p> L'implémentation du modèle est terminée mais il ne produit pas les résultats escomptés. On tente présentement de débugger le modèle en analysant les
+						solutions produites. On considère par exemple les résultats d'une simulation de 90 jours.
+
+					<p><img src="images/post4/0_Quiescent cells.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p><img src="images/post4/1_G1 cells.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p> Les cytokines stimulent la production de phagocytes, qui viennent jouer un rôle dans la réponse immunitaire contre la tumeur. La quantité de
+						cytokine atteint un plateau après les premiers jours de traitement et diminue rapidement lorsque l'immunothérapie est cessée. </p>
+
+					<p><img src="images/post4/13_Cytokines.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p><img src="images/post4/14_Phagocytes.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p>On remarque une différence de taille entre les tumeurs traitées et non traitées:</p>
+
+					<p><img src="images/post4/Tumor size multiple.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p> Les résultats sont relativement cohérents mais le système ne répond pas tel qu'attendu. Pendant les prochains jours, on espère terminer la phase de
+					débuggage. On commence aussi à contempler l'implémentation éventuelle d'AlphaZero. Principalement, on considère comment adapter la fonction objectif employée
+					par Cassidy et Craig au contexte de l'apprentissage machine.  </p>
+				</div>
+			</div>
+
+			<div class="post">
 				<h2 class="title"><a href="#">Modélisation</a></h2>
 				<p class="meta"><span class="date">11 février 2020</span>
 				<div style="clear: both;">&nbsp;</div>
@@ -40,14 +70,11 @@ Released   : 20110923
 					<p>L'implémentation du modèle d'essais cliniques se poursuit. On présente le système d'équations différentielles qui modélise la croissance tumorale. Il est
 					composé des quantités suivantes:</p>
 
-					<p><img src="images/model_desc.PNG" alt="Simply Easy Learning" width="500"></p>
-
-
-					<!--<p><img src="images/model_eq.PNG" alt="Simply Easy Learning" width="600"></p>-->
+					<p><img src="images/post3/model_desc.PNG" alt="Simply Easy Learning" width="500"></p>
 
 					<p>Après réduction, le modèle prend la forme</p>
 
-					<p><img src="images/model_eq_red.PNG" alt="Simply Easy Learning" width="600"></p>
+					<p><img src="images/post3/model_eq_red.PNG" alt="Simply Easy Learning" width="600"></p>
 
 					<p> L'implémentation initiale du modèle de croissance tumorale est complétée. L'objectif pour les jours à venir est de lancer une première simulation et de
 						tenter de reproduire un résultat connu afin de vérifier l'intégrité du code. Une description plus détaillée du modèle est offerte
