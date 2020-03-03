@@ -13,14 +13,15 @@ from AlphaSilico.src.learner import Learner
 # learner = Learner()
 
 # Number of doses per day of treatment
-immunotherapy = np.ones(100)
-virotherapy = np.zeros(100)
-virotherapy[np.arange(virotherapy.size) % 7 == 0] = 1
+immunotherapy = np.ones(75)
+# immunotherapy = np.zeros(75)
+# immunotherapy[np.arange(immunotherapy.size) % 7 == 0] = 1
+virotherapy = np.ones(10)
 
 # Model
 tumor = TumorModel(immunotherapy, virotherapy)
-history = tumor.simulate(t_start=0, t_end=3, dt=1/30, nsteps=1000)  # Run through a simulation and get the history
-tumor_size, cumulative_tumor_burden = tumor.f_obective(history)  # Compute the objective function from the history
+history = tumor.simulate(t_start=0, t_end=3, nsteps=1000)  # Run through a simulation and get the history
+tumor_size, cumulative_tumor_burden = tumor.evaluate_obective(history)  # Compute the objective function from the history
 
 print('Plotting...')
 titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
