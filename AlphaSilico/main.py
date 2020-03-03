@@ -14,8 +14,6 @@ from AlphaSilico.src.learner import Learner
 
 # Number of doses per day of treatment
 immunotherapy = np.ones(75)
-# immunotherapy = np.zeros(75)
-# immunotherapy[np.arange(immunotherapy.size) % 7 == 0] = 1
 virotherapy = np.ones(10)
 
 # Model
@@ -43,5 +41,7 @@ plt.plot(np.arange(0, tumor_size.size), tumor_size)
 plt.title('Tumor size')
 plt.savefig('outputs/Tumor size.png')
 
-
-
+plt.figure()
+plt.plot(np.arange(250), tumor.immune_dose_history[0:250])
+plt.title('Immunotherapy vs time')
+plt.savefig('outputs/Immunotherapy_doses.png')

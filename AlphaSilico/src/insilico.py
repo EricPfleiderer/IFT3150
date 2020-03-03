@@ -51,7 +51,7 @@ class TumorModel:
     # Constants
     intermitotic_SD = 6.7 / 24 / 30
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
-    gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte  # CLEARANCE RATE > 1 ??? P STRONGLY LIMITED
+    gamma_P = 0.35  # * 30  # From Barrish 2017 PNAS elimination rate of phagocyte  # CLEARANCE RATE > 1 ??? P STRONGLY LIMITED
 
     def __init__(self, immunotherapy, virotherapy, a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
                  kp=0.05*30, kq=10, k_cp=4.6754*30):
@@ -136,7 +136,16 @@ class TumorModel:
         NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
         self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
+        self.immune_dose_history = []
+
     def immune_dose(self, t):
+
+        """
+        TO DO:
+            - Bug when tracking immunotherapy through time
+        :param t: Float. Current time in months.
+        :return: Float. Current instantaneous change in immunotherapy.
+        """
 
         time_mask = np.where(t > self.t_immune_admin)  # Mask doses that have not yet been applied
 
@@ -145,6 +154,8 @@ class TumorModel:
 
         doses = self.immune_k_abs * self.immune_availability * self.immune_admin * immunotherapy  # Convert doses to available cytokines
         decay = np.exp(-self.immune_k_abs * (t - t_admin))  # Exponential decay term
+
+        self.immune_dose_history.append(np.sum(doses*decay)/self.vol)
 
         return np.sum(doses*decay)/self.vol
 
@@ -172,7 +183,7 @@ class TumorModel:
 
         # Auxiliary function
         infection = 0
-        if V > 1e-10:
+        if V > 1e-10:  # lipschitz continuity?
             infection = V / (self.eta12 + V)
         eta = self.kappa * infection
         phi = self.k_cp * C / (self.C12 + C)  # DIFFERENCE BETWEEN MATLAB (PSI12) CODE AND S.I (PSI12 VS C12).
@@ -239,7 +250,7 @@ class TumorModel:
         :return: Simulation history. Includes initial conditions as first entry.
         """
 
-        r = ode(self.evaluate_derivatives).set_integrator('vode', method='bdf', nsteps=nsteps)
+        r = ode(self.evaluate_derivatives).set_integrator('vode', method='bdf', nsteps=nsteps, max_step=1/30/20)
         # r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps)  # Small numerical fluctuations
         r.set_initial_value(self.initial_conditions, t_start)  # Set initial conditions
 
