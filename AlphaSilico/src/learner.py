@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow import concat
 from tensorflow.keras.layers import Layer, Dense, LeakyReLU
 from tensorflow.keras import Model
 from tensorflow.keras.activations import softmax
@@ -64,6 +63,6 @@ class Learner(Model):
         y = self.vision(y)
         yv = self.value_head(y)
         yp = self.policy_head(y)
-        output = concat([yv, yp], axis=1)
+        output = tf.concat([yv, yp], axis=1)
         return output 
 

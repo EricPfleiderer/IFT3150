@@ -59,12 +59,6 @@ class TumorModel:
         """
         Initializes a system of ordinary differential equations to model melanoma tumor growth. Model by Craig & Cassidy.
 
-        TO DO:
-            -
-            -
-            -
-            -
-
         :param immunotherapy: 1D Numpy array of floats. Each entry corresponds to the number of immunotherapy doses at a given day.
         :param virotherapy: 1D Numpy array of floats. Each entry corresponds to the number of virotherapy doses at a given day.
         :param a1: Float. Quiescent to interphase rate. (1/month)
@@ -98,10 +92,10 @@ class TumorModel:
         self.k_cp = k_cp
 
         # Distribution specific parameters
-        self.j = round(self.tau**2 / self.intermitotic_SD**2)
+        self.j = round(self.tau**2 / self.intermitotic_SD**2)  # Number of transit compartments
         self.k_tr = self.j / self.tau  # Transit rate across compartments
         self.dg_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)  # 14.8948 VS SUGGESTED 0.167 * 30 = 5.01 in S.I. GREATLY AFFECTS SCALE
-        # self.dg_hat = 0.167 * 30
+        # self.dg_hat = 0.167 * 30  # Suggested by S.I.
         self.dg_hat_R = self.dg_hat
 
         # Immune steady state (not used?)
@@ -136,9 +130,15 @@ class TumorModel:
         NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
         self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
-        self.immune_dose_history = {'t': [],
-                                    'h': [],
-                                    }
+        self.dose_history = {'immunotherapy': {'t': [],
+                                               'h': [],
+                                               },
+                             'virotherapy': {'t': [],
+                                             'h': [],
+                                             }
+                             }
+
+        self.test_counter = 0
 
     def immune_dose(self, t):
 
@@ -149,7 +149,7 @@ class TumorModel:
         :return: Float. Current instantaneous change in immunotherapy.
         """
 
-        time_mask = np.where(t > self.t_immune_admin)  # Mask doses that have not yet been applied
+        time_mask = np.where(t >= self.t_immune_admin)  # Mask doses that have not yet been applied
 
         immunotherapy = self.immunotherapy[time_mask]
         t_admin = self.t_immune_admin[time_mask]
@@ -157,20 +157,24 @@ class TumorModel:
         doses = self.immune_k_abs * self.immune_availability * self.immune_admin * immunotherapy  # Convert doses to available cytokines
         decay = np.exp(-self.immune_k_abs * (t - t_admin))  # Exponential decay term
 
-        if (len(self.immune_dose_history['t']) == 0 and len(self.immune_dose_history['h']) == 0) or self.immune_dose_history['t'][-1] != t:
-            self.immune_dose_history['t'].append(t)
-            self.immune_dose_history['h'].append(np.sum(doses*decay)/self.vol)
+        if (len(self.dose_history['immunotherapy']['t']) == 0 and len(self.dose_history['immunotherapy']['h']) == 0) or self.dose_history['immunotherapy']['t'][-1] != t:
+            self.dose_history['immunotherapy']['t'].append(t)
+            self.dose_history['immunotherapy']['h'].append(np.sum(doses*decay)/self.vol)
 
         return np.sum(doses*decay)/self.vol
 
     def viral_dose(self, t):
-        time_mask = np.where(t > self.t_viral_admin)  # Mask doses that have not yet been applied
+        time_mask = np.where(t >= self.t_viral_admin)  # Mask doses that have not yet been applied
 
         virotherapy = self.virotherapy[time_mask]
         t_admin = self.t_viral_admin[time_mask]
 
         doses = self.viral_k_abs * self.viral_availability * self.viral_admin * virotherapy  # Convert doses to available cytokines
         decay = np.exp(-self.viral_k_abs * (t - t_admin))  # Exponential decay term
+
+        if (len(self.dose_history['virotherapy']['t']) == 0 and len(self.dose_history['virotherapy']['h']) == 0) or self.dose_history['virotherapy']['t'][-1] != t:
+            self.dose_history['virotherapy']['t'].append(t)
+            self.dose_history['virotherapy']['h'].append(np.sum(doses*decay)/self.vol)
 
         return np.sum(doses * decay) / self.vol
 
@@ -187,7 +191,7 @@ class TumorModel:
 
         # Auxiliary function
         infection = 0
-        if V > 1e-10:  # lipschitz continuity?
+        if V > 1e-10:
             infection = V / (self.eta12 + V)
         eta = self.kappa * infection
         phi = self.k_cp * C / (self.C12 + C)  # DIFFERENCE BETWEEN MATLAB (PSI12) CODE AND S.I (PSI12 VS C12).
@@ -203,10 +207,10 @@ class TumorModel:
         dG1_dt = self.a1 * Q - (self.a2 + self.d2 + psi_G + eta) * G1
 
         # Infected cells, y[2]
-        dI_dt = -self.delta * I + eta * (G1 + N)
+        dI_dt = -self.delta * I + eta * (G1 + N + G1R + NR)
 
         # Virions, y[3]
-        dV_dt = self.alpha * self.delta * I - self.omega * V - eta * (G1 + N)  # + self.viral_dose(t)
+        dV_dt = self.alpha * self.delta * I - self.omega * V - eta * (G1 + N + G1R + NR) + self.viral_dose(t)
 
         # Transit compartments, y[4], ..., y[j+3]
         dA1_dt = self.a2 * G1 - self.k_tr * A[1] - (self.dg_hat + eta + psi_G) * A[1]
@@ -223,7 +227,7 @@ class TumorModel:
         dP_dt = phi - self.gamma_P * P
 
         # Total number of cells in cycle, y[j+6]
-        dN_dt = self.a2 * G1 - (self.dg_hat + eta + psi_G) * N - (self.k_tr / self.a2) * A[-1]  # DOES NOT APPEAR IN REDUCED FORM IN S.I.
+        dN_dt = self.a2 * G1 - (self.dg_hat + eta + psi_G) * N - (self.k_tr / self.a2) * A[-1]
 
         # Resistant quiescent cells, y[j+7]
         dQR_dt = 2 * self.nu * self.k_tr * A[-1] + 2 * self.k_tr * AR[-1] - (self.a1_R + self.d1_R) * QR
@@ -240,7 +244,16 @@ class TumorModel:
             dAR_dt.append(dAiR_dt)
 
         # Total number of resistant cells in cyle, y[2*j+9]
-        dNR_dt = self.a2 * G1R - (self.dg_hat + eta) * NR - (self.k_tr / self.a2) * AR[-1]  # DOES NOT APPEAR IN REDUCED FORM IN S.I.
+        dNR_dt = self.a2 * G1R - (self.dg_hat + eta) * NR - (self.k_tr / self.a2) * AR[-1]
+
+        # Test
+        # self.test_counter += 1
+        # print(self.test_counter)
+        # test_return = [0] * 28
+        # test_return[3] = dV_dt
+        # test_return[13] = dC_dt
+        # test_return[14] = dP_dt
+        # return test_return
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
@@ -254,8 +267,8 @@ class TumorModel:
         :return: Simulation history. Includes initial conditions as first entry.
         """
 
-        r = ode(self.evaluate_derivatives).set_integrator('vode', method='bdf', nsteps=nsteps, max_step=1/30/20)
-        # r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps)  # Small numerical fluctuations
+        # r = ode(self.evaluate_derivatives).set_integrator('vode', method='bdf', atol=1e-8, rtol=1e-8, nsteps=nsteps, max_step=1/30/20)
+        r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=1e-8, rtol=1e-8, max_step=1/30/20)  # Small numerical fluctuations
         r.set_initial_value(self.initial_conditions, t_start)  # Set initial conditions
 
         y = np.empty(shape=(0, len(self.initial_conditions)))  # Solution
@@ -263,6 +276,7 @@ class TumorModel:
         while r.successful() and r.t + self.dt < t_end:
             print('Simulating... day ' + str(int(r.t*30)))
             r.integrate(r.t + self.dt)
+            self.t = r.t
             y = np.vstack((y, np.real(r.y)))
 
         history = {'t_start': t_start,
