@@ -42,6 +42,6 @@ plt.title('Tumor size')
 plt.savefig('outputs/Tumor size.png')
 
 plt.figure()
-plt.plot(np.arange(250), tumor.immune_dose_history[0:250])
+plt.plot(tumor.immune_dose_history['t'][0:500], tumor.immune_dose_history['h'][0:500])
 plt.title('Immunotherapy vs time')
 plt.savefig('outputs/Immunotherapy_doses.png')
