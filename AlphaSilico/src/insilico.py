@@ -268,7 +268,7 @@ class TumorModel:
         """
 
         # r = ode(self.evaluate_derivatives).set_integrator('vode', method='bdf', atol=1e-8, rtol=1e-8, nsteps=nsteps, max_step=1/30/20)
-        r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=1e-8, rtol=1e-8, max_step=1/30/20)  # Small numerical fluctuations
+        r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=1e-8, rtol=1e-8, max_step=1e-2)  # Small numerical fluctuations
         r.set_initial_value(self.initial_conditions, t_start)  # Set initial conditions
 
         y = np.empty(shape=(0, len(self.initial_conditions)))  # Solution
