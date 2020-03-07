@@ -53,7 +53,7 @@ class TumorModel:
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte  # CLEARANCE RATE > 1 ??? P STRONGLY LIMITED
 
-    def __init__(self, immunotherapy, virotherapy, a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
+    def __init__(self, immunotherapy, virotherapy, treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
                  kp=0.05*30, kq=10, k_cp=4.6754*30):
 
         """
@@ -71,13 +71,14 @@ class TumorModel:
         """
 
         self.t = 0  # Current time in months
+        self.treatment_start_time = treatment_start_time
         self.dt = 1/30  # Time step (1 day)
 
         # Treatment plan
         self.immunotherapy = immunotherapy
         self.virotherapy = virotherapy
-        self.t_immune_admin = np.arange(immunotherapy.size) * self.immune_offset
-        self.t_viral_admin = np.arange(virotherapy.size) * self.viral_offset
+        self.t_immune_admin = np.arange(immunotherapy.size) * self.immune_offset + treatment_start_time
+        self.t_viral_admin = np.arange(virotherapy.size) * self.viral_offset + treatment_start_time
 
         # Variable patient parameters
         self.a1 = a1
@@ -95,7 +96,7 @@ class TumorModel:
         self.j = round(self.tau**2 / self.intermitotic_SD**2)  # Number of transit compartments
         self.k_tr = self.j / self.tau  # Transit rate across compartments
         self.dg_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)  # 14.8948 VS SUGGESTED 0.167 * 30 = 5.01 in S.I. GREATLY AFFECTS SCALE
-        # self.dg_hat = 0.167 * 30  # Suggested by S.I.
+        #self.dg_hat = 0.167 * 30  # Suggested by S.I.
         self.dg_hat_R = self.dg_hat
 
         # Immune steady state (not used?)
