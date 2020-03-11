@@ -51,11 +51,11 @@ plt.savefig('outputs/Tumor size.png')
 
 # Print dosages vs time
 plt.figure()
-plt.plot(tumor.dose_history['immunotherapy']['t'][0:2500], tumor.dose_history['immunotherapy']['h'][0:2500])
+plt.plot(tumor.dose_history['immunotherapy']['t'][0:2500], tumor.dose_history['immunotherapy']['y'][0:2500])
 plt.title('Immunotherapy vs time')
 plt.savefig('outputs/Immunotherapy_doses.png')
 
 plt.figure()
-plt.plot(tumor.dose_history['virotherapy']['t'][0:2500], tumor.dose_history['virotherapy']['h'][0:2500])
+plt.plot(tumor.dose_history['virotherapy']['t'], tumor.dose_history['virotherapy']['y'])
 plt.title('Virotherapy vs time')
 plt.savefig('outputs/Virotherapy_doses.png')

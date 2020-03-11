@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 # Local
 from AlphaSilico.src.insilico import ClinicalTrial, TumorModel
 from AlphaSilico.src.learner import Learner
+# from AlphaSilico.src import printer # Uncomment to print graphs
 
 immunotherapy = np.ones(75)
 virotherapy = np.ones(7)

@@ -9,8 +9,8 @@ class ClinicalTrial:
     def __init__(self, patients, virotherapy, immunotherapy):
         """
         :param patients: (n, 7) ndarray. Rows correspond to patients and columns correspond to variable parameters.
-        :param virotherapy_offset:  Float. Virotherapy offset (every 7 days by default).
-        :param immunotherapy_offset: Float. Immunotherapy off set (every day by default).
+        :param virotherapy:  Float. Virotherapy offset (every 7 days by default).
+        :param immunotherapy: Float. Immunotherapy off set (every day by default).
         """
 
         self.immunotherapy = immunotherapy
@@ -50,7 +50,7 @@ class TumorModel:
     # Constants
     intermitotic_SD = 6.7 / 24 / 30
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
-    gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte  # CLEARANCE RATE > 1 ??? P STRONGLY LIMITED
+    gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
 
     def __init__(self, immunotherapy, virotherapy, treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
                  kp=0.05*30, kq=10, k_cp=4.6754*30):
@@ -70,7 +70,7 @@ class TumorModel:
         """
 
         self.t = 0  # Current time in months
-        self.treatment_start_time = treatment_start_time
+        self.treatment_start_time = treatment_start_time  # Treatment start time in months
         self.dt = 1/30  # Time step (1 day)
 
         # Treatment plan
@@ -131,10 +131,10 @@ class TumorModel:
         self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
         self.dose_history = {'immunotherapy': {'t': [],
-                                               'h': [],
+                                               'y': [],
                                                },
                              'virotherapy': {'t': [],
-                                             'h': [],
+                                             'y': [],
                                              }
                              }
 
@@ -155,7 +155,7 @@ class TumorModel:
             raise ValueError('Only supported treatment types are immunotherapy and virotherapy.')
 
         t_admin = getattr(self, 't_' + treatment_type + '_admin')  # Get administration times for each dose of given treatment
-        time_mask = np.where(t >= t_admin) # Mask doses that have not yet been applied
+        time_mask = np.where(t >= t_admin)  # Mask doses that have not yet been applied
 
         treatment = getattr(self, treatment_type)[time_mask]
         t_admin = t_admin[time_mask]
@@ -167,9 +167,9 @@ class TumorModel:
         doses = k_abs * availability * admin * treatment
         decay = np.exp(-k_abs*(t-t_admin))
 
-        if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['h']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
+        if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
             self.dose_history[treatment_type]['t'].append(t)
-            self.dose_history[treatment_type]['h'].append(np.sum(doses*decay)/self.vol)
+            self.dose_history[treatment_type]['y'].append(np.sum(doses*decay)/self.vol)
 
         return np.sum(doses * decay) / self.vol
 
@@ -251,8 +251,8 @@ class TumorModel:
         tumor_size = non_resistant_cycle + resistant_cycle + self.solution_history[:, 2]
 
         cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
-        cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['h'], x=self.dose_history['immunotherapy']['t']) + \
-                                 cumtrapz(y=self.dose_history['virotherapy']['h'], x=self.dose_history['virotherapy']['t'])
+        cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
+                                 cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
 
         return tumor_size, cumulative_tumor_burden, cumulative_dose_burden
 
@@ -265,17 +265,17 @@ class TumorModel:
 
         self.solution_history = np.empty(shape=(0, len(self.initial_conditions)))
         self.dose_history = {'immunotherapy': {'t': [],
-                                               'h': [],
+                                               'y': [],
                                                },
                              'virotherapy': {'t': [],
-                                             'h': [],
+                                             'y': [],
                                              }
                              }
 
     def simulate(self, t_start=0, t_end=3, nsteps=100000):
 
         """
-        Simulate tumor growth
+        Simulate tumor growth model through time.
         :param t_start: Float. Time at the start of the simulation. Included.
         :param t_end:  Float. Time at the end of the simulation. Included.
         :param nsteps: Int. Max number of steps for a single call of the ode solver.
