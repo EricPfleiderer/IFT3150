@@ -6,18 +6,16 @@ from scipy.integrate import ode, cumtrapz
 
 class ClinicalTrial:
 
-    def __init__(self, patients, virotherapy_treatment, immunotherapy_treatment, virotherapy_offset=7/30, immunotherapy_offset=1/30):
+    def __init__(self, patients, virotherapy, immunotherapy):
         """
         :param patients: (n, 7) ndarray. Rows correspond to patients and columns correspond to variable parameters.
         :param virotherapy_offset:  Float. Virotherapy offset (every 7 days by default).
         :param immunotherapy_offset: Float. Immunotherapy off set (every day by default).
         """
 
-        self.immunotherapy_treatment = immunotherapy_treatment
-        self.virotherapy_treatment = virotherapy_treatment
+        self.immunotherapy = immunotherapy
+        self.virotherapy = virotherapy
 
-        self.virotherapy_offset = virotherapy_offset
-        self.immunotherapy_offset = immunotherapy_offset
         self.patients = patients
         self.tumors = [TumorModel(*patient) for patient in self.patients]
 
@@ -94,7 +92,7 @@ class TumorModel:
         self.k_cp = k_cp
 
         # Distribution specific parameters
-        self.j = round(self.tau**2 / self.intermitotic_SD**2)  # Number of transit compartments
+        self.j = int(round(self.tau**2 / self.intermitotic_SD**2))  # Number of transit compartments
         self.k_tr = self.j / self.tau  # Transit rate across compartments
         self.dg_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)  # 14.8948 VS SUGGESTED 0.167 * 30 = 5.01 in S.I. GREATLY AFFECTS SCALE
         # self.dg_hat = 0.167 * 30  # Suggested by S.I.

@@ -14,7 +14,7 @@ class Vision(Layer):
         self.layer2 = Dense(weights2)
 
     def __call__(self, inputs):
-        #self.add_loss(loss_func)
+        # self.add_loss(loss_func)
         x = self.layer1(inputs) 
         x = LeakyReLU(x)
         x = self.layer2(x) 
