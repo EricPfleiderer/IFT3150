@@ -6,18 +6,23 @@ from scipy.integrate import ode, cumtrapz
 
 class ClinicalTrial:
 
-    def __init__(self, patients, virotherapy, immunotherapy):
+    def __init__(self, patients, immunotherapy,  virotherapy):
         """
+        Used to manipulate and analyse large amounts of tumor models at once.
         :param patients: (n, 7) ndarray. Rows correspond to patients and columns correspond to variable parameters.
-        :param virotherapy:  Float. Virotherapy offset (every 7 days by default).
-        :param immunotherapy: Float. Immunotherapy off set (every day by default).
+        :param virotherapy:
+        :param immunotherapy:
         """
 
         self.immunotherapy = immunotherapy
         self.virotherapy = virotherapy
 
         self.patients = patients
-        self.tumors = [TumorModel(*patient) for patient in self.patients]
+        self.tumors = [TumorModel(immunotherapy, virotherapy, 0., *patient) for patient in self.patients]
+
+    def simulate(self, t_start=0, t_end=3, nsteps=100000):
+        for tumor in self.tumors:
+            tumor.simulate(t_start, t_end, nsteps)
 
 
 class TumorModel:
@@ -139,8 +144,6 @@ class TumorModel:
                              }
 
         self.solution_history = np.empty(shape=(0, len(self.initial_conditions)))
-
-        self.test_counter = 0
 
     def dose(self, t, treatment_type):
 
@@ -295,7 +298,7 @@ class TumorModel:
             self.t = r.t
 
             # Save solution history
-            self.solution_history = np.vstack((self.solution_history, np.real(r.y)))
+            self.solution_history = np.vstack((self.solution_history, r.y))
 
         sys.stdout.write('\r')
         sys.stdout.write('Simulating... Done!')
