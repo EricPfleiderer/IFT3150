@@ -1,3 +1,5 @@
+# Standard
+import sys
 
 # Third Party
 import numpy as np
@@ -12,8 +14,6 @@ from AlphaSilico.src.learner import Learner
 # trial = ClinicalTrial(patients=virtual_cohort.to_numpy(), viral_treatment=viral_treatment, immune_treatment=immune_treatment)
 # learner = Learner()
 
-include_control_group = True
-
 # Number of doses per day of treatment.
 immunotherapy = np.ones(75) * np.random.randint(0, 5, size=75)
 virotherapy = np.ones(10) * np.random.randint(1, 5, size=10)
@@ -26,13 +26,12 @@ treatment_total_time = 2.5
 # Treated tumor
 tumor = TumorModel(immunotherapy, virotherapy, treatment_start_time=treatment_start_time)
 history = tumor.simulate(t_start=0, t_end=treatment_total_time)  # Run through a simulation and get the history
-tumor_size, cumulative_tumor_burden = tumor.evaluate_obective(history)  # Compute the objective function from the history
+tumor_size, cumulative_tumor_burden, cumulative_dose_burden = tumor.evaluate_obective()  # Compute the objective function from the history
 
-if include_control_group:
-    # Untreated tumor, control group
-    control = TumorModel(immunotherapy * 0, virotherapy * 0, treatment_start_time=treatment_start_time)
-    control_history = control.simulate(t_start=0, t_end=treatment_total_time)
-    control_size, control_ctb = control.evaluate_obective(control_history)
+# # Untreated tumor, control group
+# control = TumorModel(immunotherapy * 0, virotherapy * 0, treatment_start_time=treatment_start_time)
+# control_history = control.simulate(t_start=0, t_end=treatment_total_time)
+# control_size, control_ctb, control_cdb = control.evaluate_obective()
 
 print('Plotting...')
 titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
@@ -42,19 +41,19 @@ titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
          ['Total number of resistant cells in cycle']
 
 # Print tracked quantities
-for idx, quantity in enumerate(history['y'].transpose()):
+for idx, quantity in enumerate(history.transpose()):
     plt.figure()
     plt.plot(np.arange(0, quantity.size), quantity)
     plt.title(titles[idx])
     plt.savefig('outputs/' + str(idx) + '_' + titles[idx] + '.png')
 
 # Print main metric (tumor size)
+alpha = 5
 plt.figure()
 plt.plot(np.arange(0, tumor_size.size), tumor_size, '--', label='Tumor size, test')
 plt.plot(np.arange(0, cumulative_tumor_burden.size), cumulative_tumor_burden, '--', label='Cumulative burden, test')
-if include_control_group:
-    plt.plot(np.arange(0, control_size.size), control_size, '-', label='Tumor size, control')
-    plt.plot(np.arange(0, control_ctb.size), control_ctb, '-', label='Cumulative burden, control')
+# plt.plot(np.arange(0, control_size.size), control_size, '-', label='Tumor size, control')
+# plt.plot(np.arange(0, control_ctb.size), control_ctb, '-', label='Cumulative burden, control')
 plt.title('Tumor growth')
 plt.legend()
 plt.savefig('outputs/Tumor size.png')
