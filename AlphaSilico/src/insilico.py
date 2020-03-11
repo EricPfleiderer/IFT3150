@@ -145,11 +145,14 @@ class TumorModel:
     def dose(self, t, treatment_type):
 
         """
-
+        Returns dose of a defined treatment to be administered at time t.
         :param t: Float. Current time in months.
         :param treatment_type: String. Either 'immunotherapy' or 'virotherapy'
         :return: Float. Dose administered at time t.
         """
+
+        if treatment_type not in ('immunotherapy', 'virotherapy'):
+            raise ValueError('Only supported treatment types are immunotherapy and virotherapy.')
 
         t_admin = getattr(self, 't_' + treatment_type + '_admin')  # Get administration times for each dose of given treatment
         time_mask = np.where(t >= t_admin) # Mask doses that have not yet been applied
@@ -173,6 +176,7 @@ class TumorModel:
     def evaluate_derivatives(self, t, y):
 
         """
+        Returns the right hand side of our system of ODEs at time t, given previous solution y.
         :param t: Float. Current time value.
         :param y: 1D list. Previous solution.
         :return: 1D list. Derivative of each quantity in y at time step t.
@@ -240,9 +244,38 @@ class TumorModel:
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
+    def evaluate_obective(self):
+
+        non_resistant_cycle = self.solution_history[:, 0] + self.solution_history[:, 1] + self.solution_history[:, self.j+6]  # Q, G1 and N
+        resistant_cycle = self.solution_history[:, self.j+7] + self.solution_history[:, self.j+8] + self.solution_history[:, 2*self.j+9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + self.solution_history[:, 2]
+
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
+        cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['h'], x=self.dose_history['immunotherapy']['t']) + \
+                                 cumtrapz(y=self.dose_history['virotherapy']['h'], x=self.dose_history['virotherapy']['t'])
+
+        return tumor_size, cumulative_tumor_burden, cumulative_dose_burden
+
+    def reset_histories(self):
+
+        """
+        Resets solution and dose histories for previous runs.
+        :return: Void.
+        """
+
+        self.solution_history = np.empty(shape=(0, len(self.initial_conditions)))
+        self.dose_history = {'immunotherapy': {'t': [],
+                                               'h': [],
+                                               },
+                             'virotherapy': {'t': [],
+                                             'h': [],
+                                             }
+                             }
+
     def simulate(self, t_start=0, t_end=3, nsteps=100000):
 
         """
+        Simulate tumor growth
         :param t_start: Float. Time at the start of the simulation. Included.
         :param t_end:  Float. Time at the end of the simulation. Included.
         :param nsteps: Int. Max number of steps for a single call of the ode solver.
@@ -270,15 +303,3 @@ class TumorModel:
         sys.stdout.flush()
 
         return self.solution_history
-
-    def evaluate_obective(self):
-
-        non_resistant_cycle = self.solution_history[:, 0] + self.solution_history[:, 1] + self.solution_history[:, self.j+6]  # Q, G1 and N
-        resistant_cycle = self.solution_history[:, self.j+7] + self.solution_history[:, self.j+8] + self.solution_history[:, 2*self.j+9]  # QR, G1R and NR
-        tumor_size = non_resistant_cycle + resistant_cycle + self.solution_history[:, 2]
-
-        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
-        cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['h'], x=self.dose_history['immunotherapy']['t']) + \
-                                 cumtrapz(y=self.dose_history['virotherapy']['h'], x=self.dose_history['virotherapy']['t'])
-
-        return tumor_size, cumulative_tumor_burden, cumulative_dose_burden
