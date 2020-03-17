@@ -1,3 +1,8 @@
+"""
+Settings related to self-play and training schedules, learning, etc.
+"""
+
+
 # SELF PLAY
 EPISODES = 25
 MCTS_SIMS = 50

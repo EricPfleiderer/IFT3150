@@ -57,7 +57,8 @@ class TumorModel:
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, immunotherapy, virotherapy, treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
+    def __init__(self, immunotherapy=np.zeros(75), virotherapy=np.zeros(10), treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0,
+                 d2=0.539325116600707*30,
                  kp=0.05*30, kq=10, k_cp=4.6754*30, initial_conditions=None):
 
         """

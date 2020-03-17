@@ -51,7 +51,7 @@ class PolicyHead(Layer):
         return x
 
 
-class Learner(Model):
+class GenericLearner(Model):
 
     def __init__(self):
         super(Model, self).__init__()
@@ -65,4 +65,3 @@ class Learner(Model):
         yp = self.policy_head(y)
         output = tf.concat([yv, yp], axis=1)
         return output 
-
