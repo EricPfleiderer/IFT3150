@@ -4,18 +4,15 @@ import sys
 # Third Party
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Local
-from AlphaSilico.src.insilico import ClinicalTrial, TumorModel
-from AlphaSilico.src.learner import Learner
 # from AlphaSilico.src import printer # Uncomment to print graphs
 
-immunotherapy = np.ones(75)
-virotherapy = np.ones(7)
+from AlphaSilico.src.learner import Learner
+from AlphaSilico.src.Agent import Agent
+from AlphaSilico.src import config
 
-virtual_cohort = pd.read_csv('data/virtual_cohort.csv')
-trial = ClinicalTrial(patients=virtual_cohort.to_numpy(), immunotherapy=immunotherapy, virotherapy=virotherapy)
-learner = Learner()
+alphasilico = Agent(name='AlphaSilico', action_size=(4, 4), mcts_simulations=config.MCTS_SIMS, cpuct=config.CPUCT, model=Learner())
+
 
 

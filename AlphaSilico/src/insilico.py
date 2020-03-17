@@ -58,7 +58,7 @@ class TumorModel:
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
 
     def __init__(self, immunotherapy, virotherapy, treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30,
-                 kp=0.05*30, kq=10, k_cp=4.6754*30):
+                 kp=0.05*30, kq=10, k_cp=4.6754*30, initial_conditions=None):
 
         """
         Initializes a system of ordinary differential equations to model melanoma tumor growth. Model by Craig & Cassidy.
@@ -72,6 +72,7 @@ class TumorModel:
         :param kp: Float. Phagocyte-tumor cell contact rate. (1/month)
         :param kq: Float. Phagocyte cell digestion constant.
         :param k_cp: Float. Maximal phagocyte production rate (10**10 cells/month)
+        :param initial_conditions: Tuple. Initial conditions for every quantitiy in system of ODEs. None (by default) generates standard initial conditions.
         """
 
         self.t = 0  # Current time in months
@@ -121,19 +122,23 @@ class TumorModel:
         self.total_cells = 200
 
         # Initial conditions
-        Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
-        G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
-        I = 0  # Infected cells
-        V = 0  # Virions
-        A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
-        N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
-        C = self.C_prod_homeo / self.k_elim  # Cytokines
-        P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
-        QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
-        G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
-        AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
-        NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
-        self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
+        if initial_conditions is None:
+            Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
+            G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
+            I = 0  # Infected cells
+            V = 0  # Virions
+            A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
+            N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
+            C = self.C_prod_homeo / self.k_elim  # Cytokines
+            P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
+            QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
+            G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
+            AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
+            NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
+            self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
+
+        else:
+            self.initial_conditions = initial_conditions
 
         self.dose_history = {'immunotherapy': {'t': [],
                                                'y': [],
