@@ -3,43 +3,51 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Local
-from AlphaSilico.src.insilico import TumorModel
+from AlphaSilico.src.insilico import Environment
 
 # Number of doses per day of treatment.
-immunotherapy = np.ones(75) * np.random.randint(0, 5, size=75)
-virotherapy = np.ones(10) * np.random.randint(1, 5, size=10)
 
-# Total length of treatment
+max_dose = 4
 treatment_start_time = 0
-treatment_total_time = 2.5
+treatment_len = 2.5
+observation_len = 2.5
+
+# Random treatment
+treatment = np.transpose(np.array([np.random.randint(0, max_dose+1, size=int(treatment_len*30)), np.random.randint(1, 5, size=int(treatment_len*30))]))
 
 # Models
 # Treated tumor
-tumor = TumorModel(immunotherapy, virotherapy, treatment_start_time=treatment_start_time)
-history = tumor.simulate(t_start=0, t_end=treatment_total_time)  # Run through a simulation and get the history
-tumor_size, cumulative_tumor_burden, cumulative_dose_burden = tumor.evaluate_obective()  # Compute the objective function from the history
+env = Environment()
+for x in range(int(observation_len*30)):
+    actions = (0, 0)
+    if x < int(treatment_len*30):
+        actions = (treatment[x][0], treatment[x][1])
+    env.step(actions)
+
+tumor_size, cumulative_tumor_burden = env.evaluate_obective()  # Compute the objective function from the history
 
 # Untreated tumor, control group
-control = TumorModel(immunotherapy * 0, virotherapy * 0, treatment_start_time=treatment_start_time)
-control_history = control.simulate(t_start=0, t_end=treatment_total_time)
-control_size, control_ctb, control_cdb = control.evaluate_obective()
+control = Environment()
+for x in range(int(observation_len*30)):
+    actions = (0, 0)
+    control.step(actions)
+control_size, control_ctb = control.evaluate_obective()
 
 print('Plotting...')
 titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
-         ['Transit compartment ' + str(n+1) for n in range(tumor.j)] + \
+         ['Transit compartment ' + str(n+1) for n in range(env.state.j)] + \
          ['Cytokines', 'Phagocytes', 'Total number of cells in cycle', 'Resistant quiescent cells', 'Resistant G1 cells'] + \
-         ['Resistant transit compartment ' + str(n+1) for n in range(tumor.j)] + \
+         ['Resistant transit compartment ' + str(n+1) for n in range(env.state.j)] + \
          ['Total number of resistant cells in cycle']
 
 # Print tracked quantities
-for idx, quantity in enumerate(history.transpose()):
+for idx, quantity in enumerate(env.history.transpose()):
     plt.figure()
     plt.plot(np.arange(0, quantity.size), quantity)
     plt.title(titles[idx])
     plt.savefig('outputs/' + str(idx) + '_' + titles[idx] + '.png')
 
 # Print main metric (tumor size)
-alpha = 5
 plt.figure()
 plt.plot(np.arange(0, tumor_size.size), tumor_size, '--', label='Tumor size, test')
 plt.plot(np.arange(0, cumulative_tumor_burden.size), cumulative_tumor_burden, '--', label='Cumulative burden, test')
@@ -51,11 +59,11 @@ plt.savefig('outputs/Tumor size.png')
 
 # Print dosages vs time
 plt.figure()
-plt.plot(tumor.dose_history['immunotherapy']['t'][0:2500], tumor.dose_history['immunotherapy']['y'][0:2500])
+plt.plot(env.state.dose_history['immunotherapy']['t'][0:2500], env.state.dose_history['immunotherapy']['y'][0:2500])
 plt.title('Immunotherapy vs time')
 plt.savefig('outputs/Immunotherapy_doses.png')
 
 plt.figure()
-plt.plot(tumor.dose_history['virotherapy']['t'], tumor.dose_history['virotherapy']['y'])
+plt.plot(env.state.dose_history['virotherapy']['t'], env.state.dose_history['virotherapy']['y'])
 plt.title('Virotherapy vs time')
 plt.savefig('outputs/Virotherapy_doses.png')

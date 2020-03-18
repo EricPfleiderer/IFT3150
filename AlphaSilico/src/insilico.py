@@ -4,39 +4,95 @@ import numpy as np
 from scipy.integrate import ode, cumtrapz
 
 
-class ClinicalTrial:
+class Environment:
 
-    def __init__(self, patients, immunotherapy,  virotherapy):
+    def __init__(self, treatment_len=2.5, observation_len=6., max_dose=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
+
         """
-        Used to manipulate and analyse large amounts of tumor models at once.
-        :param patients: (n, 7) ndarray. Rows correspond to patients and columns correspond to variable parameters.
-        :param virotherapy:
-        :param immunotherapy:
+        This class serves as an interface between the State class and the Agent class.
+        :param treatment_len: Float. Total length of treatment in months. 2.5 by default.
+        :param observation_len: Float. Total length of observation period in months. 6 by default.
+        :param max_dose: Int. Upper limit on how many doses may be administered at once. 4 by default.
+        :param immunotherapy_offset: Float. Immunotherapy offset in months. Daily by default.
+        :param virotherapy_offset: Float. Virotherapy offset in months. Weekly by default.
         """
 
-        self.immunotherapy = immunotherapy
-        self.virotherapy = virotherapy
+        # Parameters
+        self.treatment_len = treatment_len
+        self.observation_len = observation_len
+        self.immunotherapy_offset = immunotherapy_offset
+        self.virotherapy_offset = virotherapy_offset
+        self.max_doses = max_dose
 
-        self.patients = patients
-        self.tumors = [TumorModel(immunotherapy, virotherapy, 0., *patient) for patient in self.patients]
+        # Initializations
+        self.state = State(treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset, treatment_start_time=0.)
+        self.t = 0  # Current time in months
+        self.dt = 1/30  # Step size in months
+        self.y = np.array(self.state.initial_conditions)  # Current solution
+        self.history = np.empty(shape=(0, len(self.state.initial_conditions)))  # Solution history
 
-    def simulate(self, t_start=0, t_end=3, nsteps=100000):
-        for tumor in self.tumors:
-            tumor.simulate(t_start, t_end, nsteps)
+    def reset(self):
+        self.state = TumorModel(treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset, treatment_start_time=0.)
+        self.t = 0
+        self.y = np.array(self.state.initial_conditions)  # Current solution
+        self.history = np.empty(shape=(0, len(self.initial_conditions)))
+
+    def step(self, actions=(0, 0)):
+
+        # Modify treatment
+        if self.t < self.treatment_len:
+
+            # Add immunotherapy if needed
+            if round(self.t/self.dt) % (self.immunotherapy_offset/self.dt) == 0:
+                self.state.add_to_treatment(actions[0], 'immunotherapy')
+
+            # Add virotherapy if needed
+            if round(self.t/self.dt) % (self.virotherapy_offset/self.dt) == 0:
+                self.state.add_to_treatment(actions[1], 'virotherapy')
+
+        # Simulate a time step
+        self.state.simulate(step_size=self.dt)
+
+        # Updates
+        self.history = np.vstack((self.history, self.state.y))
+        self.t, self.y = self.state.t, self.state.y
+
+        # Check for endgame
+        done = self.t >= self.observation_len
+
+        return self.state, done
+
+    def get_id(self):
+        """
+        Convert current solution to string format to be used as keys in MCTS dictionnaries.
+        :return: String. Representation of current solution.
+        """
+        return np.array2string(self.state.y)
+
+    def evaluate_obective(self):
+
+        non_resistant_cycle = self.history[:, 0] + self.history[:, 1] + self.history[:, self.state.j+6]  # Q, G1 and N
+        resistant_cycle = self.history[:, self.state.j+7] + self.history[:, self.state.j+8] + self.history[:, 2*self.state.j+9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + self.history[:, 2]
+
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
+
+        # cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
+        #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
+
+        return tumor_size, cumulative_tumor_burden  # , cumulative_dose_burden
 
 
-class TumorModel:
+class State:
 
     vol = 7
 
     # Immunotherapy
-    immunotherapy_offset = 1/30  # Offset
     immunotherapy_admin = 125000  # Cytokine per unit volume
     immunotherapy_k_abs = 6.6311 * 30  # Absorbtion rate
     immunotherapy_availability = 0.85  # Bioavailability
 
     # Virotherapy
-    virotherapy_offset = 7 / 30
     virotherapy_admin = 250  # Viral load
     virotherapy_k_abs = 20 * 30  # Absorbtion rate
     virotherapy_availability = 1  # Bioavailability
@@ -57,9 +113,8 @@ class TumorModel:
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, immunotherapy=np.zeros(75), virotherapy=np.zeros(10), treatment_start_time=0., a1=1.183658646441553*30, a2=1.758233712464858*30, d1=0,
-                 d2=0.539325116600707*30,
-                 kp=0.05*30, kq=10, k_cp=4.6754*30, initial_conditions=None):
+    def __init__(self, treatment_len=2.5, immunotherapy_offset=1/30, virotherapy_offset=7/30, treatment_start_time=0., a1=1.183658646441553*30,
+                 a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30, kp=0.05*30, kq=10, k_cp=4.6754*30):
 
         """
         Initializes a system of ordinary differential equations to model melanoma tumor growth. Model by Craig & Cassidy.
@@ -76,15 +131,20 @@ class TumorModel:
         :param initial_conditions: Tuple. Initial conditions for every quantitiy in system of ODEs. None (by default) generates standard initial conditions.
         """
 
-        self.t = 0  # Current time in months
-        self.treatment_start_time = treatment_start_time  # Treatment start time in months
-        self.dt = 1/30  # Time step (1 day)
+        self.treatment_len = treatment_len
+        self.treatment_start = treatment_start_time  # Treatment start time in months
 
-        # Treatment plan
-        self.immunotherapy = immunotherapy
-        self.virotherapy = virotherapy
-        self.t_immunotherapy_admin = np.arange(immunotherapy.size) * self.immunotherapy_offset + treatment_start_time
-        self.t_virotherapy_admin = np.arange(virotherapy.size) * self.virotherapy_offset + treatment_start_time
+        # Treatment plan (no treatment by default)
+        self.immunotherapy = np.array([])
+        self.virotherapy = np.array([])
+
+        # Treatment offsets
+        self.immunotherapy_offset = immunotherapy_offset
+        self.virotherapy_offset = virotherapy_offset
+
+        # Administration times
+        self.t_immunotherapy_admin = np.arange(self.immunotherapy.size) * self.immunotherapy_offset + treatment_start_time
+        self.t_virotherapy_admin = np.arange(self.virotherapy.size) * self.virotherapy_offset + treatment_start_time
 
         # Variable patient parameters
         self.a1 = a1
@@ -123,23 +183,25 @@ class TumorModel:
         self.total_cells = 200
 
         # Initial conditions
-        if initial_conditions is None:
-            Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
-            G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
-            I = 0  # Infected cells
-            V = 0  # Virions
-            A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
-            N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
-            C = self.C_prod_homeo / self.k_elim  # Cytokines
-            P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
-            QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
-            G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
-            AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
-            NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
-            self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
+        Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
+        G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
+        I = 0  # Infected cells
+        V = 0  # Virions
+        A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
+        N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
+        C = self.C_prod_homeo / self.k_elim  # Cytokines
+        P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
+        QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
+        G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
+        AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
+        NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
+        self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
-        else:
-            self.initial_conditions = initial_conditions
+        self.t = 0
+        self.y = self.initial_conditions
+
+        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=1e-2)  # Set integrator
+        self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
 
         self.dose_history = {'immunotherapy': {'t': [],
                                                'y': [],
@@ -149,7 +211,19 @@ class TumorModel:
                                              }
                              }
 
-        self.solution_history = np.empty(shape=(0, len(self.initial_conditions)))
+    def add_to_treatment(self, dosage, treatment_type):
+        """
+        Used to add dosage to immunotherapy or virotherapy treatments.
+        :param dosage: Int. Dosage to add.
+        :param treatment_type: String. 'immunotherapy' or 'virotherapy'.
+        :return:
+        """
+
+        treatment = getattr(self, treatment_type)
+        offset = getattr(self, treatment_type + '_offset')
+
+        setattr(self, treatment_type, np.append(treatment, dosage))  # Add dose to correct treatment
+        setattr(self, 't_' + treatment_type + '_admin', np.arange(treatment.size+1) * offset + self.treatment_start)  # Update admninistration times
 
     def dose(self, t, treatment_type):
 
@@ -160,27 +234,31 @@ class TumorModel:
         :return: Float. Dose administered at time t.
         """
 
-        if treatment_type not in ('immunotherapy', 'virotherapy'):
-            raise ValueError('Only supported treatment types are immunotherapy and virotherapy.')
+        if t < self.treatment_len + self.treatment_start and getattr(self, treatment_type).size is not 0:
 
-        t_admin = getattr(self, 't_' + treatment_type + '_admin')  # Get administration times for each dose of given treatment
-        time_mask = np.where(t >= t_admin)  # Mask doses that have not yet been applied
+            if treatment_type not in ('immunotherapy', 'virotherapy'):
+                raise ValueError('Only supported treatment types are immunotherapy and virotherapy.')
 
-        treatment = getattr(self, treatment_type)[time_mask]
-        t_admin = t_admin[time_mask]
+            t_admin = getattr(self, 't_' + treatment_type + '_admin')  # Get administration times for each dose of given treatment
+            time_mask = np.where(t >= t_admin)  # Mask doses that have not yet been applied
 
-        k_abs = getattr(self, treatment_type + '_k_abs')
-        availability = getattr(self, treatment_type + '_availability')
-        admin = getattr(self, treatment_type + '_admin')
+            treatment = getattr(self, treatment_type)[time_mask]
+            t_admin = t_admin[time_mask]
 
-        doses = k_abs * availability * admin * treatment
-        decay = np.exp(-k_abs*(t-t_admin))
+            k_abs = getattr(self, treatment_type + '_k_abs')
+            availability = getattr(self, treatment_type + '_availability')
+            admin = getattr(self, treatment_type + '_admin')
 
-        if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
-            self.dose_history[treatment_type]['t'].append(t)
-            self.dose_history[treatment_type]['y'].append(np.sum(doses*decay)/self.vol)
+            doses = k_abs * availability * admin * treatment
+            decay = np.exp(-k_abs*(t-t_admin))
 
-        return np.sum(doses * decay) / self.vol
+            if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
+                self.dose_history[treatment_type]['t'].append(t)
+                self.dose_history[treatment_type]['y'].append(np.sum(doses*decay)/self.vol)
+
+            return np.sum(doses * decay) / self.vol
+
+        return 0
 
     def evaluate_derivatives(self, t, y):
 
@@ -253,62 +331,16 @@ class TumorModel:
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
-    def evaluate_obective(self):
-
-        non_resistant_cycle = self.solution_history[:, 0] + self.solution_history[:, 1] + self.solution_history[:, self.j+6]  # Q, G1 and N
-        resistant_cycle = self.solution_history[:, self.j+7] + self.solution_history[:, self.j+8] + self.solution_history[:, 2*self.j+9]  # QR, G1R and NR
-        tumor_size = non_resistant_cycle + resistant_cycle + self.solution_history[:, 2]
-
-        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
-        cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
-                                 cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
-
-        return tumor_size, cumulative_tumor_burden, cumulative_dose_burden
-
-    def reset_histories(self):
-
-        """
-        Resets solution and dose histories for previous runs.
-        :return: Void.
-        """
-
-        self.solution_history = np.empty(shape=(0, len(self.initial_conditions)))
-        self.dose_history = {'immunotherapy': {'t': [],
-                                               'y': [],
-                                               },
-                             'virotherapy': {'t': [],
-                                             'y': [],
-                                             }
-                             }
-
-    def simulate(self, t_start=0, t_end=3, nsteps=100000):
+    def simulate(self, step_size=1/30):
 
         """
         Simulate tumor growth model through time.
-        :param t_start: Float. Time at the start of the simulation. Included.
-        :param t_end:  Float. Time at the end of the simulation. Included.
-        :param nsteps: Int. Max number of steps for a single call of the ode solver.
-        :return: Simulation history. Includes initial conditions as first entry.
+        :param step_size: Float. Time step in months.
+        :return: Numpy array. New solution.
         """
 
-        r = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=1e-8, rtol=1e-8, max_step=1e-2)  # Set integrator
-        r.set_initial_value(self.initial_conditions, t_start)  # Set initial conditions
+        self.integrator.integrate(self.integrator.t + step_size)
+        self.t = self.integrator.t
+        self.y = self.integrator.y
 
-        while r.successful() and r.t < t_end:
-            sys.stdout.write('\r')
-            sys.stdout.write('Simulating... ' + str(round(r.t / t_end * 100, 1)) + '%')
-            sys.stdout.flush()
-
-            # Solve for solution
-            r.integrate(r.t + self.dt)
-            self.t = r.t
-
-            # Save solution history
-            self.solution_history = np.vstack((self.solution_history, r.y))
-
-        sys.stdout.write('\r')
-        sys.stdout.write('Simulating... Done!')
-        sys.stdout.write('\n')
-        sys.stdout.flush()
-
-        return self.solution_history
+        return self.y
