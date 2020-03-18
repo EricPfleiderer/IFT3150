@@ -7,28 +7,29 @@ from AlphaSilico.src.insilico import Environment
 
 # Number of doses per day of treatment.
 
+min_dose = 0
 max_dose = 4
 treatment_start_time = 0
 treatment_len = 2.5
-observation_len = 2.5
+observation_len = 3
 
 # Random treatment
-treatment = np.transpose(np.array([np.random.randint(0, max_dose+1, size=int(treatment_len*30)), np.random.randint(1, 5, size=int(treatment_len*30))]))
+treatment = np.transpose(np.array([np.random.randint(min_dose, max_dose+1, size=int(treatment_len*30)), np.random.randint(min_dose, max_dose+1, size=int(treatment_len*30))]))
 
 # Models
 # Treated tumor
 env = Environment()
-for x in range(int(observation_len*30)):
+for day in range(int(observation_len*30)):
     actions = (0, 0)
-    if x < int(treatment_len*30):
-        actions = (treatment[x][0], treatment[x][1])
+    if day < int(treatment_len*30):
+        actions = (treatment[day][0], treatment[day][1])
     env.step(actions)
 
 tumor_size, cumulative_tumor_burden = env.evaluate_obective()  # Compute the objective function from the history
 
 # Untreated tumor, control group
 control = Environment()
-for x in range(int(observation_len*30)):
+for _ in range(int(observation_len*30)):
     actions = (0, 0)
     control.step(actions)
 control_size, control_ctb = control.evaluate_obective()
