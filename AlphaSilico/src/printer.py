@@ -6,22 +6,21 @@ import matplotlib.pyplot as plt
 from AlphaSilico.src.insilico import Environment
 
 # Number of doses per day of treatment.
-
-min_doses = 1
-max_doses = 2
+min_doses = 0
+max_doses = 4
 treatment_start = 0
-treatment_len = 2.5  # Treatment length in months
-observation_len = 3  # Observation period length, including treatment
+treatment_len = 75  # Treatment length in months
+observation_len = 90  # Observation period length, including treatment
 
 # Random treatment
-treatment = np.transpose(np.array([np.random.randint(min_doses, max_doses+1, size=int(treatment_len*30)), np.random.randint(min_doses, max_doses+1, size=int(treatment_len*30))]))
+treatment = np.transpose(np.array([np.random.randint(min_doses, max_doses+1, size=int(treatment_len)), np.random.randint(min_doses, max_doses+1, size=int(treatment_len))]))
 
 # Models
 # Treated tumor
 env = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
-for day in range(int(observation_len*30)):
+for day in range(observation_len):
     actions = (0, 0)
-    if day < int(treatment_len*30):
+    if day < int(treatment_len):
         actions = (treatment[day][0], treatment[day][1])
     env.step(actions)
 
@@ -29,7 +28,7 @@ tumor_size, cumulative_tumor_burden = env.evaluate_obective()  # Compute the obj
 
 # Untreated tumor, control group
 control = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
-for _ in range(int(observation_len*30)):
+for _ in range(observation_len):
     actions = (0, 0)
     control.step(actions)
 control_size, control_ctb = control.evaluate_obective()
@@ -49,14 +48,22 @@ for idx, quantity in enumerate(env.history['y'].transpose()):
     plt.savefig('outputs/' + str(idx) + '_' + titles[idx] + '.png')
 
 # Print main metric (tumor size)
-plt.figure()
-plt.plot(np.arange(0, observation_len, env.dt), tumor_size, '--', label='Tumor size, test')
-plt.plot(np.arange(0, observation_len - env.dt, env.dt), cumulative_tumor_burden, '--', label='Cumulative burden, test')
-plt.plot(np.arange(0, observation_len, control.dt), control_size, '-', label='Tumor size, control')
-plt.plot(np.arange(0, observation_len - env.dt, control.dt), control_ctb, '-', label='Cumulative burden, control')
+fig, ax1 = plt.subplots()
+ax1.set_xlabel('Time (days)')
+ax1.set_ylabel('Tumor size (number of cells)')
+ax1.plot(np.arange(0, observation_len, env.dt), tumor_size, '--', c=(0, 0.6, 0), label='Tumor size, test')
+ax1.plot(np.arange(0, observation_len, control.dt), control_size, '-', c=(0.2, 0, 0), label='Tumor size, control')
+ax1.tick_params(axis='y')
+ax2 = ax1.twinx()
+ax2.set_ylabel('Cumulative burden')
+ax2.plot(np.arange(0, observation_len - env.dt, env.dt), cumulative_tumor_burden, '--', c=(0, 0.8, 0), label='Cumulative burden, test')
+ax2.plot(np.arange(0, observation_len - control.dt, control.dt), control_ctb, '-', c=(0.8, 0, 0), label='Cumulative burden, control')
+ax2.tick_params(axis='y')
+fig.tight_layout(rect=[0, 0.03, 1, 0.95])  # otherwise the right y-label is slightly clipped
 plt.title('Tumor growth')
 plt.legend()
 plt.savefig('outputs/Tumor size.png')
+
 
 # Print dosages vs time
 plt.figure()

@@ -6,15 +6,15 @@ from scipy.integrate import ode, cumtrapz
 
 class Environment:
 
-    def __init__(self, treatment_start=0., treatment_len=2.5, observation_len=6., max_doses=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
+    def __init__(self, treatment_start=0, treatment_len=75, observation_len=90, max_doses=4, immunotherapy_offset=1, virotherapy_offset=7):
 
         """
         This class serves as an interface between the State class and the Agent class.
-        :param treatment_len: Float. Total length of treatment in months. 2.5 by default.
-        :param observation_len: Float. Total length of observation period in months. 6 by default.
+        :param treatment_len: Float. Total length of treatment in days. 2.5 by default.
+        :param observation_len: Float. Total length of observation period in days. 6 by default.
         :param max_dose: Int. Upper limit on how many doses may be administered at once. 4 by default.
-        :param immunotherapy_offset: Float. Immunotherapy offset in months. Daily by default.
-        :param virotherapy_offset: Float. Virotherapy offset in months. Weekly by default.
+        :param immunotherapy_offset: Float. Immunotherapy offset in days. Daily by default.
+        :param virotherapy_offset: Float. Virotherapy offset in days. Weekly by default.
         """
 
         # Parameters
@@ -27,8 +27,8 @@ class Environment:
 
         # Initializations
         self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset)
-        self.t = 0  # Current time in months
-        self.dt = 1/30  # Step size in months
+        self.t = 0  # Current time in days
+        self.dt = 1  # Step size in days
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = {'t': np.empty(0),
                         'y': np.empty(shape=(0, len(self.state.initial_conditions)))
@@ -40,7 +40,7 @@ class Environment:
         resistant_cycle = self.history['y'][:, self.state.j + 7] + self.history['y'][:, self.state.j + 8] + self.history['y'][:, 2 * self.state.j + 9]  # QR, G1R and NR
         tumor_size = non_resistant_cycle + resistant_cycle + self.history['y'][:, 2]
 
-        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=self.history['t'], dx=self.dt)  # Cumulative integral of tumor size
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=self.history['t'])  # Cumulative integral of tumor size
 
         # cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
         #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
@@ -59,7 +59,7 @@ class Environment:
         Resets the environment for new simulations.
         :return: Void.
         """
-        self.state = TumorModel(treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset, treatment_start=0.)
+        self.state = State(treatment_start=0, treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = {'t': np.empty(0),
@@ -100,7 +100,7 @@ class Environment:
         self.t, self.y = self.state.t, self.state.y
 
         # Check for endgame
-        done = round(self.t / self.dt) >= round(self.observation_len / self.dt)  # Compute in days instead of months to avoid irrational fractions
+        done = round(self.t / self.dt) >= round(self.observation_len / self.dt)
 
         if done and verbose:
             print('\n Simulating... done!')
@@ -112,34 +112,34 @@ class State:
 
     # Immunotherapy
     immunotherapy_admin = 125000  # Cytokine per unit volume
-    immunotherapy_k_abs = 6.6311 * 30  # Absorbtion rate
+    immunotherapy_k_abs = 6.6311  # Absorbtion rate
     immunotherapy_availability = 0.85  # Bioavailability
     immunotherapy_vol = 7
 
     # Virotherapy
     virotherapy_admin = 250  # Viral load
-    virotherapy_k_abs = 20 * 30  # Absorbtion rate
+    virotherapy_k_abs = 20  # Absorbtion rate
     virotherapy_availability = 1  # Bioavailability
     virotherapy_vol = 7
-    kappa = 3.534412642851458 * 30  # Virion contact rate
-    delta = 4.962123414821151 * 30  # Lysis rate
+    kappa = 3.534412642851458  # Virion contact rate
+    delta = 4.962123414821151  # Lysis rate
     alpha = 0.008289097649957  # Lytic virion release rate
-    omega = 9.686308020782763 * 30  # Virion death rate
+    omega = 9.686308020782763  # Virion death rate
     eta12 = 0.510538277701167  # Virion half effect concentration
 
     # Cytokine parameters
-    C_prod_homeo = 0.00039863 * 30  # Homeostatic cytokine production rate
-    C_prod_max = 1.429574637713578 * 30  # Maximal cytokine production rate
-    C12 = 0.739376299393775 * 30  # Maximal cytokine production rate
-    k_elim = 0.16139 * 30  # Cytokine elimination rate
+    C_prod_homeo = 0.00039863  # Homeostatic cytokine production rate
+    C_prod_max = 1.429574637713578  # Maximal cytokine production rate
+    C12 = 0.739376299393775  # Maximal cytokine production rate
+    k_elim = 0.16139  # Cytokine elimination rate
 
     # Constants
-    intermitotic_SD = 6.7 / 24 / 30
-    PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
-    gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
+    intermitotic_SD = 6.7 / 24
+    PSI12 = 5  # Cytokine production half effect  # MISSING IN MATLAB CODE ???
+    gamma_P = 0.35  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, treatment_len=2.5, immunotherapy_offset=1/30, virotherapy_offset=7/30, treatment_start=0., a1=1.183658646441553*30,
-                 a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30, kp=0.05*30, kq=10, k_cp=4.6754*30):
+    def __init__(self, treatment_start=0, treatment_len=75, immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553,
+                 a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
 
         """
         Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
@@ -155,8 +155,8 @@ class State:
         :param initial_conditions: Tuple. Initial conditions for every quantitiy in system of ODEs. None (by default) generates standard initial conditions.
         """
 
-        self.treatment_len = treatment_len  # Treatment length in months
-        self.treatment_start = treatment_start  # Treatment start time in months
+        self.treatment_len = treatment_len  # Treatment length in days
+        self.treatment_start = treatment_start  # Treatment start time in days
 
         # Treatment plan (no treatment by default)
         self.immunotherapy = np.array([])
@@ -176,7 +176,7 @@ class State:
         self.d1 = d1
         self.d2 = d2
         self.d3 = d2
-        self.tau = (33.7/24 - 30/a2)/30
+        self.tau = (33.7/24 - 1/a2)
         self.kp = kp
         self.kq = kq
         self.ks = kq
@@ -185,8 +185,8 @@ class State:
         # Distribution specific parameters
         self.j = int(round(self.tau**2 / self.intermitotic_SD**2))  # Number of transit compartments
         self.k_tr = self.j / self.tau  # Transit rate across compartments
-        self.dg_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)  # 14.8948 VS SUGGESTED 0.167 * 30 = 5.01 in S.I. GREATLY AFFECTS SCALE
-        # self.dg_hat = 0.167 * 30  # Suggested by S.I.
+        self.dg_hat = self.j / self.tau * (math.exp(self.d3 * self.tau / (self.j + 1)) - 1)  # 14.8948 VS SUGGESTED 0.167 = 5.01 in S.I. GREATLY AFFECTS SCALE
+        # self.dg_hat = 0.167  # Suggested by S.I.
         self.dg_hat_R = self.dg_hat
 
         # Immune steady state (not used?)
@@ -255,7 +255,7 @@ class State:
 
         """
         Returns dose of a defined treatment to be administered at time t.
-        :param t: Float. Current time in months.
+        :param t: Float. Current time in days.
         :param treatment_type: String. Either 'immunotherapy' or 'virotherapy'
         :return: Float. Dose administered at time t.
         """
@@ -275,7 +275,7 @@ class State:
 
             # Compute initial dose and decay terms
             doses = k_abs * availability * admin * treatment
-            decay = np.exp(-k_abs*(t-t_admin))  # UNSTABLE / NOISY (t-tadmin not always 0) TO DO: FLAG??
+            decay = np.exp(-k_abs*(t-t_admin))  # UNSTABLE / NOISY INITIAL DECAYS (t-tadmin not always precisely 0 at first pass)
 
             if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
                 self.dose_history[treatment_type]['t'].append(t)
@@ -356,11 +356,11 @@ class State:
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
-    def simulate(self, step_size=1/30):
+    def simulate(self, step_size=1):
 
         """
         Simulate the model through time.
-        :param step_size: Float. Time step in months.
+        :param step_size: Float. Time step in days.
         :return: Numpy array. New solution.
         """
 

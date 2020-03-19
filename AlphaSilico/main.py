@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 # Local
-from AlphaSilico.src import printer # Uncomment to print graphs
+from AlphaSilico.src import printer  # Uncomment to print graphs
 
 from AlphaSilico.src.insilico import Environment, State
 from AlphaSilico.src.learners import GenericLearner
