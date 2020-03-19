@@ -30,8 +30,8 @@ class Environment:
         self.t = 0  # Current time in days
         self.dt = 1  # Step size in days
         self.y = np.array(self.state.initial_conditions)  # Current solution
-        self.history = {'t': np.empty(0),
-                        'y': np.empty(shape=(0, len(self.state.initial_conditions)))
+        self.history = {'t': np.array([self.t]),
+                        'y': np.array([self.state.initial_conditions])
                         }
 
     def evaluate_obective(self):
@@ -62,8 +62,8 @@ class Environment:
         self.state = State(treatment_start=0, treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
-        self.history = {'t': np.empty(0),
-                        'y': np.empty(shape=(0, len(self.state.initial_conditions)))
+        self.history = {'t': np.array([self.t]),
+                        'y': np.array([self.state.initial_conditions])
                         }
 
     def step(self, actions=(0, 0), verbose=True):
