@@ -6,7 +6,7 @@ from scipy.integrate import ode, cumtrapz
 
 class Environment:
 
-    def __init__(self, treatment_len=2.5, observation_len=6., max_dose=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
+    def __init__(self, treatment_start=0., treatment_len=2.5, observation_len=6., max_dose=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
 
         """
         This class serves as an interface between the State class and the Agent class.
@@ -18,6 +18,7 @@ class Environment:
         """
 
         # Parameters
+        self.treatment_start = treatment_start
         self.treatment_len = treatment_len
         self.observation_len = observation_len
         self.immunotherapy_offset = immunotherapy_offset
@@ -25,19 +26,34 @@ class Environment:
         self.max_doses = max_dose
 
         # Initializations
-        self.state = State(treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset, treatment_start_time=0.)
+        self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset)
         self.t = 0  # Current time in months
         self.dt = 1/30  # Step size in months
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = np.empty(shape=(0, len(self.state.initial_conditions)))  # Solution history
 
     def reset(self):
-        self.state = TumorModel(treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset, treatment_start_time=0.)
+        """
+        Resets the environment for new simulations.
+        :return: Void.
+        """
+        self.state = TumorModel(treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset, treatment_start=0.)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = np.empty(shape=(0, len(self.initial_conditions)))
 
-    def step(self, actions=(0, 0)):
+    def step(self, actions=(0, 0), verbose=True):
+
+        """
+        A single call to this method will advance the state by dt and preserve history.
+        :param actions: Tuple of two ints. Dosage to be applied during the call. First entry corresponds to immunotherapy, second to virotherapy.
+        :return: State instance, Boolean. New state after call to step, boolean flag for endgame.
+        """
+
+        if verbose:
+            sys.stdout.write('\r')
+            sys.stdout.write('Simulating... ' + str(round(self.t/self.observation_len*100, 1)) + '%')
+            sys.stdout.flush()
 
         # Modify treatment
         if self.t < self.treatment_len:
@@ -58,7 +74,10 @@ class Environment:
         self.t, self.y = self.state.t, self.state.y
 
         # Check for endgame
-        done = self.t >= self.observation_len
+        done = round(self.t / self.dt) >= round(self.observation_len / self.dt)  # Compute in days instead of months to avoid irrational fractions
+
+        if done and verbose:
+            print('\n Simulating... done!')
 
         return self.state, done
 
@@ -85,17 +104,17 @@ class Environment:
 
 class State:
 
-    vol = 7
-
     # Immunotherapy
     immunotherapy_admin = 125000  # Cytokine per unit volume
     immunotherapy_k_abs = 6.6311 * 30  # Absorbtion rate
     immunotherapy_availability = 0.85  # Bioavailability
+    immunotherapy_vol = 7
 
     # Virotherapy
     virotherapy_admin = 250  # Viral load
     virotherapy_k_abs = 20 * 30  # Absorbtion rate
     virotherapy_availability = 1  # Bioavailability
+    virotherapy_vol = 7
     kappa = 3.534412642851458 * 30  # Virion contact rate
     delta = 4.962123414821151 * 30  # Lysis rate
     alpha = 0.008289097649957  # Lytic virion release rate
@@ -113,12 +132,11 @@ class State:
     PSI12 = 5 * 30  # Cytokine production half effect  # MISSING * 30 IN MATLAB CODE ???
     gamma_P = 0.35 * 30  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, treatment_len=2.5, immunotherapy_offset=1/30, virotherapy_offset=7/30, treatment_start_time=0., a1=1.183658646441553*30,
+    def __init__(self, treatment_len=2.5, immunotherapy_offset=1/30, virotherapy_offset=7/30, treatment_start=0., a1=1.183658646441553*30,
                  a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30, kp=0.05*30, kq=10, k_cp=4.6754*30):
 
         """
         Initializes a system of ordinary differential equations to model melanoma tumor growth. Model by Craig & Cassidy.
-
         :param immunotherapy: 1D Numpy array of floats. Each entry corresponds to the number of immunotherapy doses at a given day.
         :param virotherapy: 1D Numpy array of floats. Each entry corresponds to the number of virotherapy doses at a given day.
         :param a1: Float. Quiescent to interphase rate. (1/month)
@@ -132,7 +150,7 @@ class State:
         """
 
         self.treatment_len = treatment_len
-        self.treatment_start = treatment_start_time  # Treatment start time in months
+        self.treatment_start = treatment_start  # Treatment start time in months
 
         # Treatment plan (no treatment by default)
         self.immunotherapy = np.array([])
@@ -143,8 +161,8 @@ class State:
         self.virotherapy_offset = virotherapy_offset
 
         # Administration times
-        self.t_immunotherapy_admin = np.arange(self.immunotherapy.size) * self.immunotherapy_offset + treatment_start_time
-        self.t_virotherapy_admin = np.arange(self.virotherapy.size) * self.virotherapy_offset + treatment_start_time
+        self.t_immunotherapy_admin = np.arange(self.immunotherapy.size) * self.immunotherapy_offset + treatment_start
+        self.t_virotherapy_admin = np.arange(self.virotherapy.size) * self.virotherapy_offset + treatment_start
 
         # Variable patient parameters
         self.a1 = a1
@@ -197,11 +215,9 @@ class State:
         NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
         self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
 
+        # Simulation statistics
         self.t = 0
         self.y = self.initial_conditions
-
-        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=1e-2)  # Set integrator
-        self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
 
         self.dose_history = {'immunotherapy': {'t': [],
                                                'y': [],
@@ -211,19 +227,23 @@ class State:
                                              }
                              }
 
+        # Set integrator
+        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=1e-2)
+        self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
+
     def add_to_treatment(self, dosage, treatment_type):
+
         """
-        Used to add dosage to immunotherapy or virotherapy treatments.
+        Used to add a dosage to immunotherapy or virotherapy treatments.
         :param dosage: Int. Dosage to add.
         :param treatment_type: String. 'immunotherapy' or 'virotherapy'.
         :return:
         """
 
-        treatment = getattr(self, treatment_type)
-        offset = getattr(self, treatment_type + '_offset')
-
-        setattr(self, treatment_type, np.append(treatment, dosage))  # Add dose to correct treatment
-        setattr(self, 't_' + treatment_type + '_admin', np.arange(treatment.size+1) * offset + self.treatment_start)  # Update admninistration times
+        treatment = getattr(self, treatment_type)  # Select appropriate treatment
+        offset = getattr(self, treatment_type + '_offset')  # Select appropriate offset
+        setattr(self, treatment_type, np.append(treatment, dosage))  # Add dose to treatment plan
+        setattr(self, 't_' + treatment_type + '_admin', np.arange(treatment.size+1) * offset + self.treatment_start)  # Update admninistration times to cover new treatmant plan
 
     def dose(self, t, treatment_type):
 
@@ -234,29 +254,28 @@ class State:
         :return: Float. Dose administered at time t.
         """
 
+        # Only medicate if a treatment is defined and ongoing
         if t < self.treatment_len + self.treatment_start and getattr(self, treatment_type).size is not 0:
 
-            if treatment_type not in ('immunotherapy', 'virotherapy'):
-                raise ValueError('Only supported treatment types are immunotherapy and virotherapy.')
+            # Masking
+            time_mask = np.where(t >= getattr(self, 't_' + treatment_type + '_admin'))  # Create a mask to ignore future doses
+            treatment = getattr(self, treatment_type)[time_mask]  # Apply mask to treatment
+            t_admin = getattr(self, 't_' + treatment_type + '_admin')[time_mask]  # Apply mask to administration times
 
-            t_admin = getattr(self, 't_' + treatment_type + '_admin')  # Get administration times for each dose of given treatment
-            time_mask = np.where(t >= t_admin)  # Mask doses that have not yet been applied
-
-            treatment = getattr(self, treatment_type)[time_mask]
-            t_admin = t_admin[time_mask]
-
+            # Get relevant parameters
             k_abs = getattr(self, treatment_type + '_k_abs')
             availability = getattr(self, treatment_type + '_availability')
             admin = getattr(self, treatment_type + '_admin')
 
+            # Compute initial dose and decay terms
             doses = k_abs * availability * admin * treatment
             decay = np.exp(-k_abs*(t-t_admin))
 
             if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
                 self.dose_history[treatment_type]['t'].append(t)
-                self.dose_history[treatment_type]['y'].append(np.sum(doses*decay)/self.vol)
+                self.dose_history[treatment_type]['y'].append(np.sum(doses*decay)/getattr(self, treatment_type + '_vol'))
 
-            return np.sum(doses * decay) / self.vol
+            return np.sum(doses * decay) / getattr(self, treatment_type + '_vol')
 
         return 0
 
@@ -280,7 +299,7 @@ class State:
         phi = self.k_cp * C / (self.C12 + C)  # DIFFERENCE BETWEEN MATLAB (PSI12) CODE AND S.I (PSI12 VS C12).
         psi_Q = self.kp * P / (1 + self.kq * Q)
         psi_G = self.kp * P / (1 + self.ks * G1)
-        a = self.delta * I + psi_G * G1 + psi_Q * Q  # CAPITAL PSI == PSI_G * G + PSI_Q * Q ???
+        a = self.delta * I + psi_G * G1 + psi_Q * Q
         C_prod = self.C_prod_homeo + (self.C_prod_max - self.C_prod_homeo) * (a / self.C12 + a)
 
         # Quiescent cells, y[0]
@@ -334,7 +353,7 @@ class State:
     def simulate(self, step_size=1/30):
 
         """
-        Simulate tumor growth model through time.
+        Simulate the model through time.
         :param step_size: Float. Time step in months.
         :return: Numpy array. New solution.
         """
