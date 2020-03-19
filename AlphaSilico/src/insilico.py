@@ -6,7 +6,7 @@ from scipy.integrate import ode, cumtrapz
 
 class Environment:
 
-    def __init__(self, treatment_start=0., treatment_len=2.5, observation_len=6., max_dose=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
+    def __init__(self, treatment_start=0., treatment_len=2.5, observation_len=6., max_doses=4, immunotherapy_offset=1/30, virotherapy_offset=7/30):
 
         """
         This class serves as an interface between the State class and the Agent class.
@@ -23,7 +23,7 @@ class Environment:
         self.observation_len = observation_len
         self.immunotherapy_offset = immunotherapy_offset
         self.virotherapy_offset = virotherapy_offset
-        self.max_doses = max_dose
+        self.max_doses = max_doses
 
         # Initializations
         self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset)
@@ -31,6 +31,26 @@ class Environment:
         self.dt = 1/30  # Step size in months
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = np.empty(shape=(0, len(self.state.initial_conditions)))  # Solution history
+
+    def evaluate_obective(self):
+
+        non_resistant_cycle = self.history[:, 0] + self.history[:, 1] + self.history[:, self.state.j + 6]  # Q, G1 and N
+        resistant_cycle = self.history[:, self.state.j + 7] + self.history[:, self.state.j + 8] + self.history[:, 2 * self.state.j + 9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + self.history[:, 2]
+
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
+
+        # cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
+        #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
+
+        return tumor_size, cumulative_tumor_burden  # , cumulative_dose_burden
+
+    def get_id(self):
+        """
+        Convert current solution to string format to be used as keys in MCTS dictionnaries.
+        :return: String. Representation of current solution.
+        """
+        return np.array2string(self.state.y)
 
     def reset(self):
         """
@@ -47,6 +67,7 @@ class Environment:
         """
         A single call to this method will advance the state by dt and preserve history.
         :param actions: Tuple of two ints. Dosage to be applied during the call. First entry corresponds to immunotherapy, second to virotherapy.
+        :param verbose: Boolean. Prints simulation progress if True.
         :return: State instance, Boolean. New state after call to step, boolean flag for endgame.
         """
 
@@ -80,26 +101,6 @@ class Environment:
             print('\n Simulating... done!')
 
         return self.state, done
-
-    def get_id(self):
-        """
-        Convert current solution to string format to be used as keys in MCTS dictionnaries.
-        :return: String. Representation of current solution.
-        """
-        return np.array2string(self.state.y)
-
-    def evaluate_obective(self):
-
-        non_resistant_cycle = self.history[:, 0] + self.history[:, 1] + self.history[:, self.state.j+6]  # Q, G1 and N
-        resistant_cycle = self.history[:, self.state.j+7] + self.history[:, self.state.j+8] + self.history[:, 2*self.state.j+9]  # QR, G1R and NR
-        tumor_size = non_resistant_cycle + resistant_cycle + self.history[:, 2]
-
-        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
-
-        # cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
-        #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
-
-        return tumor_size, cumulative_tumor_burden  # , cumulative_dose_burden
 
 
 class State:
@@ -136,7 +137,7 @@ class State:
                  a2=1.758233712464858*30, d1=0, d2=0.539325116600707*30, kp=0.05*30, kq=10, k_cp=4.6754*30):
 
         """
-        Initializes a system of ordinary differential equations to model melanoma tumor growth. Model by Craig & Cassidy.
+        Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
         :param immunotherapy: 1D Numpy array of floats. Each entry corresponds to the number of immunotherapy doses at a given day.
         :param virotherapy: 1D Numpy array of floats. Each entry corresponds to the number of virotherapy doses at a given day.
         :param a1: Float. Quiescent to interphase rate. (1/month)
@@ -149,7 +150,7 @@ class State:
         :param initial_conditions: Tuple. Initial conditions for every quantitiy in system of ODEs. None (by default) generates standard initial conditions.
         """
 
-        self.treatment_len = treatment_len
+        self.treatment_len = treatment_len  # Treatment length in months
         self.treatment_start = treatment_start  # Treatment start time in months
 
         # Treatment plan (no treatment by default)
@@ -269,7 +270,7 @@ class State:
 
             # Compute initial dose and decay terms
             doses = k_abs * availability * admin * treatment
-            decay = np.exp(-k_abs*(t-t_admin))
+            decay = np.exp(-k_abs*(t-t_admin))  # UNSTABLE / NOISY (t-tadmin not always 0) TO DO: FLAG??
 
             if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
                 self.dose_history[treatment_type]['t'].append(t)
@@ -291,7 +292,7 @@ class State:
         Q, G1, I, V, A, C, P, N, QR, G1R, AR, NR = y[0], y[1], y[2], y[3], y[4:self.j+4], y[self.j+4], y[self.j+5], y[self.j+6], y[self.j+7], y[self.j+8], \
                                                    y[self.j+9:2*self.j+9], y[2*self.j+9]
 
-        # Auxiliary function
+        # Auxiliary functions
         infection = 0
         if V > 1e-10:
             infection = V / (self.eta12 + V)
@@ -359,7 +360,6 @@ class State:
         """
 
         self.integrator.integrate(self.integrator.t + step_size)
-        self.t = self.integrator.t
-        self.y = self.integrator.y
+        self.t, self.y = self.integrator.t, self.integrator.y
 
         return self.y

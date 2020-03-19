@@ -7,14 +7,14 @@ from AlphaSilico.src.insilico import Environment
 
 # Number of doses per day of treatment.
 
-min_dose = 1
-max_dose = 4
+min_doses = 1
+max_doses = 2
 treatment_start = 0
 treatment_len = 2.5  # Treatment length in months
 observation_len = 3  # Observation period length, including treatment
 
 # Random treatment
-treatment = np.transpose(np.array([np.random.randint(min_dose, max_dose+1, size=int(treatment_len*30)), np.random.randint(min_dose, max_dose+1, size=int(treatment_len*30))]))
+treatment = np.transpose(np.array([np.random.randint(min_doses, max_doses+1, size=int(treatment_len*30)), np.random.randint(min_doses, max_doses+1, size=int(treatment_len*30))]))
 
 # Models
 # Treated tumor
