@@ -30,15 +30,17 @@ class Environment:
         self.t = 0  # Current time in months
         self.dt = 1/30  # Step size in months
         self.y = np.array(self.state.initial_conditions)  # Current solution
-        self.history = np.empty(shape=(0, len(self.state.initial_conditions)))  # Solution history
+        self.history = {'t': np.empty(0),
+                        'y': np.empty(shape=(0, len(self.state.initial_conditions)))
+                        }
 
     def evaluate_obective(self):
 
-        non_resistant_cycle = self.history[:, 0] + self.history[:, 1] + self.history[:, self.state.j + 6]  # Q, G1 and N
-        resistant_cycle = self.history[:, self.state.j + 7] + self.history[:, self.state.j + 8] + self.history[:, 2 * self.state.j + 9]  # QR, G1R and NR
-        tumor_size = non_resistant_cycle + resistant_cycle + self.history[:, 2]
+        non_resistant_cycle = self.history['y'][:, 0] + self.history['y'][:, 1] + self.history['y'][:, self.state.j + 6]  # Q, G1 and N
+        resistant_cycle = self.history['y'][:, self.state.j + 7] + self.history['y'][:, self.state.j + 8] + self.history['y'][:, 2 * self.state.j + 9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + self.history['y'][:, 2]
 
-        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=None, dx=self.dt)  # Cumulative integral of tumor size
+        cumulative_tumor_burden = cumtrapz(y=tumor_size, x=self.history['t'], dx=self.dt)  # Cumulative integral of tumor size
 
         # cumulative_dose_burden = cumtrapz(y=self.dose_history['immunotherapy']['y'], x=self.dose_history['immunotherapy']['t']) + \
         #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
@@ -60,7 +62,9 @@ class Environment:
         self.state = TumorModel(treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset, treatment_start=0.)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
-        self.history = np.empty(shape=(0, len(self.initial_conditions)))
+        self.history = {'t': np.empty(0),
+                        'y': np.empty(shape=(0, len(self.state.initial_conditions)))
+                        }
 
     def step(self, actions=(0, 0), verbose=True):
 
@@ -91,7 +95,8 @@ class Environment:
         self.state.simulate(step_size=self.dt)
 
         # Updates
-        self.history = np.vstack((self.history, self.state.y))
+        self.history['y'] = np.vstack((self.history['y'], self.state.y))
+        self.history['t'] = np.append(self.history['t'], self.t)
         self.t, self.y = self.state.t, self.state.y
 
         # Check for endgame

@@ -42,7 +42,7 @@ titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
          ['Total number of resistant cells in cycle']
 
 # Print tracked quantities
-for idx, quantity in enumerate(env.history.transpose()):
+for idx, quantity in enumerate(env.history['y'].transpose()):
     plt.figure()
     plt.plot(np.arange(0, observation_len, env.dt), quantity)
     plt.title(titles[idx])
