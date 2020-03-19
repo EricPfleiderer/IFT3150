@@ -44,16 +44,16 @@ titles = ['Quiescent cells', 'G1 cells', 'Infected cells', 'Virions'] + \
 # Print tracked quantities
 for idx, quantity in enumerate(env.history.transpose()):
     plt.figure()
-    plt.plot(np.arange(0, quantity.size), quantity)
+    plt.plot(np.arange(0, observation_len, env.dt), quantity)
     plt.title(titles[idx])
     plt.savefig('outputs/' + str(idx) + '_' + titles[idx] + '.png')
 
 # Print main metric (tumor size)
 plt.figure()
-plt.plot(np.arange(0, tumor_size.size), tumor_size, '--', label='Tumor size, test')
-plt.plot(np.arange(0, cumulative_tumor_burden.size), cumulative_tumor_burden, '--', label='Cumulative burden, test')
-plt.plot(np.arange(0, control_size.size), control_size, '-', label='Tumor size, control')
-plt.plot(np.arange(0, control_ctb.size), control_ctb, '-', label='Cumulative burden, control')
+plt.plot(np.arange(0, observation_len, env.dt), tumor_size, '--', label='Tumor size, test')
+plt.plot(np.arange(0, observation_len - env.dt, env.dt), cumulative_tumor_burden, '--', label='Cumulative burden, test')
+plt.plot(np.arange(0, observation_len, control.dt), control_size, '-', label='Tumor size, control')
+plt.plot(np.arange(0, observation_len - env.dt, control.dt), control_ctb, '-', label='Cumulative burden, control')
 plt.title('Tumor growth')
 plt.legend()
 plt.savefig('outputs/Tumor size.png')
