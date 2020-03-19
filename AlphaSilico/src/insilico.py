@@ -234,8 +234,21 @@ class State:
                              }
 
         # Set integrator
-        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=1e-2)
+        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=5e-3)
         self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
+
+    def reset_integrator(self, nsteps=100000, max_steps=5e-3, atol=1e-8, rtol=1e-8):
+        """
+
+        :param nsteps: Int. Maximum number of calls before the solver quits.
+        :param max_steps: Float. Max step size the solver can take.
+        :param atol: Float. Absolute tolerance.
+        :param rtol: Float. Relative tolerance.
+        :return: Void.
+        """
+
+        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=atol, rtol=rtol, max_step=max_steps)
+        self.integrator.set_initial_value(self.y, self.t)  # Set initial conditions
 
     def add_to_treatment(self, dosage, treatment_type):
 
@@ -255,6 +268,12 @@ class State:
 
         """
         Returns dose of a defined treatment to be administered at time t.
+
+        VULNERABILITY: Decay terms at t in t_admin are unsteady due to finite solver steps. Solver must use small steps around t_admin. Suggested 5e-3 and smaller.
+
+        TO DO:
+            - Implement detection event (first passes through t_admin) to dynamically rescale step size.
+
         :param t: Float. Current time in days.
         :param treatment_type: String. Either 'immunotherapy' or 'virotherapy'
         :return: Float. Dose administered at time t.
@@ -275,7 +294,7 @@ class State:
 
             # Compute initial dose and decay terms
             doses = k_abs * availability * admin * treatment
-            decay = np.exp(-k_abs*(t-t_admin))  # UNSTABLE / NOISY INITIAL DECAYS (t-tadmin not always precisely 0 at first pass)
+            decay = np.exp(-k_abs*(t-t_admin))  # UNSTABLE / NOISY, REQUIRES SMALL STEPS AROUND t_admin
 
             if (len(self.dose_history[treatment_type]['t']) == 0 and len(self.dose_history[treatment_type]['y']) == 0) or self.dose_history[treatment_type]['t'][-1] != t:
                 self.dose_history[treatment_type]['t'].append(t)
