@@ -1,67 +1,84 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, Dense, LeakyReLU
-from tensorflow.keras import Model
-from tensorflow.keras.activations import softmax
+
+from keras.layers import Dense, LeakyReLU, Input, Concatenate, BatchNormalization
+from keras.regularizers import l1, l2, l1_l2
+from keras.activations import softmax
+from keras import Model, Sequential
+from keras.utils import plot_model
 
 # TODO: Add weight initialisation
 # TODO: Specify training method
 
+"""
+Inputs: Patient parameters, current solution, (dose history? avoided by using RNN)
+Outputs: Policy - Immunotherapy and Virotherapy dose at given day (Classification)
+         Value - Quality of position from +1 to -1 (Regression)
+"""
 
-class Vision(Layer):
-    def __init__(self, weights1=20, weights2=10):
-        super(Vision, self).__init__()
-        self.layer1 = Dense(weights1)
-        self.layer2 = Dense(weights2)
 
-    def __call__(self, inputs):
-        # self.add_loss(loss_func)
-        x = self.layer1(inputs) 
-        x = LeakyReLU(x)
-        x = self.layer2(x) 
-        x = LeakyReLU(x)
+class Learner:
+
+    def __init__(self, param_size=5, state_size=28, policy_size=2, value_size=1):
+        self.param_size = param_size
+        self.state_size = state_size
+        self.policy_size = policy_size
+        self.value_size = value_size
+        self.model = self.__build_model()
+
+    def __core(self, merged_input):
+        x = Dense(50, kernel_regularizer=l2())(merged_input)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
+        x = Dense(25, kernel_regularizer=l2())(x)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
         return x
 
-
-class ValueHead(Layer):
-    def __init__(self, weights=10):
-        super(ValueHead, self).__init__()
-        self.layer1 = Dense(weights)
-        self.out = Dense(1)
-
-    def __call__(self, inputs):
-        x = self.layer1(inputs)
-        x = softmax(x)
-        x = self.out(x)
+    def __value_head(self, x):
+        x = Dense(10, kernel_regularizer=l2())(x)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
+        x = Dense(self.value_size, use_bias=False, activation='linear', kernel_regularizer=l2())(x)
         return x
 
-
-class PolicyHead(Layer):
-    def __init__(self, weights1=20, weights2=10):
-        super(PolicyHead, self).__init__()
-        self.layer1 = Dense(weights1)
-        self.layer2 = Dense(weights2)
-        self.out = Dense(2)
-
-    def __call__(self, inputs):
-        x = self.layer1(inputs)
-        x = LeakyReLU(x)
-        x = self.layer2(x)
-        x = softmax(x)
-        x = self.out(x)
+    def __policy_head(self, x):
+        x = Dense(10, kernel_regularizer=l2())(x)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
+        x = Dense(self.policy_size, use_bias=False, activation='linear', kernel_regularizer=l2())(x)
         return x
 
+    def __build_model(self):
 
-class GenericLearner(Model):
+        # Accept and merge two inputs
+        inputs = [Input(shape=(self.param_size,)), Input(shape=(self.state_size,))]
+        merged_input = Concatenate()([inputs[0], inputs[1]])
 
-    def __init__(self):
-        super(Model, self).__init__()
-        self.vision = Vision()
-        self.value_head = ValueHead()
-        self.policy_head = PolicyHead()
+        # Build the core from the merged input
+        core = self.__core(merged_input)
 
-    def __call__(self, y):
-        y = self.vision(y)
-        yv = self.value_head(y)
-        yp = self.policy_head(y)
-        output = tf.concat([yv, yp], axis=1)
-        return output 
+        # Build the heads from the core
+        value_head = self.__value_head(core)
+        policy_head = self.__policy_head(core)
+
+        # Return the final model
+        return Model(inputs=inputs, outputs=[value_head, policy_head])
+
+    def convert_to_input(self, state):
+        pass
+
+    def predict(self, x):
+        return self.model.predict(x)
+
+    def fit(self, states, targets, epochs, verbose, validation_split, batch_size):
+        return self.model.fit(states, targets, epochs=epochs, verbose=verbose, validation_split=validation_split, batch_size=batch_size)
+
+    def write(self, model, version):
+        pass
+
+    def read(self, model, version):
+        pass
+
+    def plot_model(self):
+        if self.model is not None:
+            plot_model(self.model, to_file='outputs/Model_graph.png')
