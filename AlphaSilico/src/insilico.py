@@ -53,7 +53,7 @@ class Environment:
         Resets the environment for new simulations.
         :return: Void.
         """
-        self.state = State(treatment_start=0, treatment_len=treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset)
+        self.state = State(treatment_start=0, treatment_len=self.treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = {'t': np.array([self.t]),
@@ -139,16 +139,15 @@ class State:
 
         """
         Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
-        :param immunotherapy: 1D Numpy array of floats. Each entry corresponds to the number of immunotherapy doses at a given day.
-        :param virotherapy: 1D Numpy array of floats. Each entry corresponds to the number of virotherapy doses at a given day.
-        :param a1: Float. Quiescent to interphase rate. (1/month)
-        :param a2: Float. Interphase to active phase rate. (1/month)
-        :param d1: Float. Quiescent death rate. (1/month)
-        :param d2: Float. Interphase death rate. (1/month)
-        :param kp: Float. Phagocyte-tumor cell contact rate. (1/month)
+        :param treatment_start: Int. First day of treatment.
+        :param treatment_len: Int. Treatment length in days.
+        :param a1: Float. Quiescent to interphase rate. (1/day)
+        :param a2: Float. Interphase to active phase rate. (1/day)
+        :param d1: Float. Quiescent death rate. (1/day)
+        :param d2: Float. Interphase death rate. (1/day)
+        :param kp: Float. Phagocyte-tumor cell contact rate. (1/day)
         :param kq: Float. Phagocyte cell digestion constant.
-        :param k_cp: Float. Maximal phagocyte production rate (10**10 cells/month)
-        :param initial_conditions: Tuple. Initial conditions for every quantitiy in system of ODEs. None (by default) generates standard initial conditions.
+        :param k_cp: Float. Maximal phagocyte production rate (10**10 cells/day)
         """
 
         self.treatment_len = treatment_len  # Treatment length in days

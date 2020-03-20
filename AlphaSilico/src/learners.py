@@ -1,24 +1,37 @@
+# Third-party
 import tensorflow as tf
-
 from keras.layers import Dense, LeakyReLU, Input, Concatenate, BatchNormalization
-from keras.regularizers import l1, l2, l1_l2
-from keras.activations import softmax
-from keras import Model, Sequential
+from keras.regularizers import l2
+from keras.optimizers import SGD
+from keras import Model
 from keras.utils import plot_model
+from keras.backend import zeros, shape, equal
 
-# TODO: Add weight initialisation
-# TODO: Specify training method
+from AlphaSilico.src import config
 
-"""
-Inputs: Patient parameters, current solution, (dose history? avoided by using RNN)
-Outputs: Policy - Immunotherapy and Virotherapy dose at given day (Classification)
-         Value - Quality of position from +1 to -1 (Regression)
-"""
+
+class Losses:
+
+    def softmax_cross_entropy_with_logits(y_true, y_pred):
+
+        pi = y_true
+        p = y_pred
+
+        zero = zeros(shape=shape(pi), dtype=tf.float32)
+        where = equal(pi, zero)
+
+        negatives = tf.fill(tf.shape(pi), -100.0)
+        p = tf.where(where, negatives, p)
+
+        loss = tf.nn.softmax_cross_entropy_with_logits(labels=pi, logits=p)
+
+        return loss
 
 
 class Learner:
 
-    def __init__(self, param_size=5, state_size=28, policy_size=2, value_size=1):
+    def __init__(self, learning_rate, param_size=5, state_size=28, policy_size=2, value_size=1):
+        self.learning_rate = learning_rate
         self.param_size = param_size
         self.state_size = state_size
         self.policy_size = policy_size
@@ -38,14 +51,14 @@ class Learner:
         x = Dense(10, kernel_regularizer=l2())(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
-        x = Dense(self.value_size, use_bias=False, activation='linear', kernel_regularizer=l2())(x)
+        x = Dense(self.value_size, use_bias=False, activation='linear', kernel_regularizer=l2(), name='value_head')(x)
         return x
 
     def __policy_head(self, x):
         x = Dense(10, kernel_regularizer=l2())(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
-        x = Dense(self.policy_size, use_bias=False, activation='linear', kernel_regularizer=l2())(x)
+        x = Dense(self.policy_size, use_bias=False, activation='linear', kernel_regularizer=l2(), name='policy_head')(x)
         return x
 
     def __build_model(self):
@@ -61,8 +74,14 @@ class Learner:
         value_head = self.__value_head(core)
         policy_head = self.__policy_head(core)
 
+        model = Model(inputs=inputs, outputs=[value_head, policy_head])
+
+        model.compile(loss={'value_head': 'mean_squared_error', 'policy_head': Losses.softmax_cross_entropy_with_logits},
+                      optimizer=SGD(lr=self.learning_rate, momentum=config.MOMENTUM),
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5})
+
         # Return the final model
-        return Model(inputs=inputs, outputs=[value_head, policy_head])
+        return model
 
     def convert_to_input(self, state):
         pass
@@ -82,3 +101,4 @@ class Learner:
     def plot_model(self):
         if self.model is not None:
             plot_model(self.model, to_file='outputs/Model_graph.png')
+
