@@ -12,7 +12,7 @@ class Environment:
         This class serves as an interface between the State class and the Agent class.
         :param treatment_len: Float. Total length of treatment in days. 2.5 by default.
         :param observation_len: Float. Total length of observation period in days. 6 by default.
-        :param max_dose: Int. Upper limit on how many doses may be administered at once. 4 by default.
+        :param max_doses: Int. Upper limit on how many doses may be administered at once. 4 by default.
         :param immunotherapy_offset: Float. Immunotherapy offset in days. Daily by default.
         :param virotherapy_offset: Float. Virotherapy offset in days. Weekly by default.
         """
@@ -33,6 +33,7 @@ class Environment:
         self.history = {'t': np.array([self.t]),
                         'y': np.array([self.state.initial_conditions])
                         }
+        self.allowed_actions = np.arange(max_doses)
 
     def evaluate_obective(self):
 
@@ -46,13 +47,6 @@ class Environment:
         #                          cumtrapz(y=self.dose_history['virotherapy']['y'], x=self.dose_history['virotherapy']['t'])
 
         return tumor_size, cumulative_tumor_burden  # , cumulative_dose_burden
-
-    def get_id(self):
-        """
-        Convert current solution to string format to be used as keys in MCTS dictionnaries.
-        :return: String. Representation of current solution.
-        """
-        return np.array2string(self.state.y)
 
     def reset(self):
         """
@@ -105,7 +99,9 @@ class Environment:
         if done and verbose:
             print('\n Simulating... done!')
 
-        return self.state, done
+        value = 0  # TO DO: IMPLEMENT VALUE TRACKING
+
+        return self.state, value, done
 
 
 class State:
@@ -236,6 +232,13 @@ class State:
         # Set integrator
         self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=5e-3)
         self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
+
+    def get_id(self):
+        """
+        Convert current solution to string format to be used as keys in MCTS dictionnaries.
+        :return: String. Representation of current solution.
+        """
+        return np.array2string(self.y)
 
     def reset_integrator(self, nsteps=100000, max_steps=5e-3, atol=1e-8, rtol=1e-8):
         """
