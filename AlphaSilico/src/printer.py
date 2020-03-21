@@ -9,8 +9,8 @@ from AlphaSilico.src.insilico import Environment
 def standard_treatment():
 
     # Simulation and treatment parameters
-    min_doses = 1
-    max_doses = 2
+    min_doses = 0
+    max_doses = 4
     treatment_start = 0
     treatment_len = 75  # Treatment length in days
     observation_len = 90  # Observation period length, including treatment
@@ -70,13 +70,13 @@ def standard_treatment():
 
     # Print dosages vs time
     plt.figure()
-    plt.plot(env.state.dose_history['immunotherapy']['t'][0:3000], env.state.dose_history['immunotherapy']['y'][0:3000])
+    plt.plot(env.state.dose_history['immunotherapy']['t'], env.state.dose_history['immunotherapy']['y'])
     plt.xlabel('Temps (jours)')
     plt.ylabel('Cytokines')
     plt.savefig('outputs/Immunotherapy_doses.png')
 
     plt.figure()
-    plt.plot(env.state.dose_history['virotherapy']['t'][0:3000], env.state.dose_history['virotherapy']['y'][0:3000])
+    plt.plot(env.state.dose_history['virotherapy']['t'], env.state.dose_history['virotherapy']['y'])
     plt.xlabel('Temps (jours)')
     plt.ylabel('Virus')
     plt.savefig('outputs/Virotherapy_doses.png')

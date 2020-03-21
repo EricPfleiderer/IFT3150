@@ -125,8 +125,9 @@ class State:  # Equivalent to GameState
     PSI12 = 5  # Cytokine production half effect  # MISSING IN MATLAB CODE ???
     gamma_P = 0.35  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, initial_conditions=None, treatment_start=0, treatment_len=75, observation_len=90, immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553,
-                 a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
+    def __init__(self, initial_conditions=None, dose_history=None, immunotherapy=None, virotherapy=None, treatment_start=0, treatment_len=75, observation_len=90, \
+                                                                                                                                                        immunotherapy_offset=1, virotherapy_offset=7,
+                 a1=1.183658646441553, a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
 
         """
         Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
@@ -145,9 +146,14 @@ class State:  # Equivalent to GameState
         self.treatment_len = treatment_len  # Treatment length in days
         self.observation_len = observation_len  # Total expected simulation length in days
 
+        self.immunotherapy = immunotherapy
+        self.virotherapy = virotherapy
+
         # Treatment plan (no treatment by default)
-        self.immunotherapy = np.array([])
-        self.virotherapy = np.array([])
+        if immunotherapy is None:
+            self.immunotherapy = np.array([])
+        if virotherapy is None:
+            self.virotherapy = np.array([])
 
         # Treatment offsets
         self.immunotherapy_offset = immunotherapy_offset
@@ -218,13 +224,15 @@ class State:  # Equivalent to GameState
         self.y = np.array(self.initial_conditions)
         self.id = self.get_id()
 
-        self.dose_history = {'immunotherapy': {'t': [],
-                                               'y': [],
-                                               },
-                             'virotherapy': {'t': [],
-                                             'y': [],
-                                             }
-                             }
+        self.dose_history = dose_history
+        if self.dose_history is None:
+            self.dose_history = {'immunotherapy': {'t': [],
+                                                   'y': [],
+                                                   },
+                                 'virotherapy': {'t': [],
+                                                 'y': [],
+                                                 }
+                                 }
 
         self.integrator = None
 
@@ -385,7 +393,7 @@ class State:  # Equivalent to GameState
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
-    def _simulate(self, step_size=1):
+    def _forward(self, step_size=1):
 
         """
         Simulate the model through time.
@@ -434,7 +442,7 @@ class State:  # Equivalent to GameState
                 self._add_to_treatment(action[1], 'virotherapy')
 
         # Simulate a step in time
-        self._simulate(step_size=1)
+        self._forward(step_size=1)
 
         # Get tumor stats for value head target
         _, doublings = self.get_tumor_stats()
@@ -442,7 +450,6 @@ class State:  # Equivalent to GameState
         # Check for endgame
         done = self.t >= self.observation_len
 
-        return State(initial_conditions={'t': self.t, 'y': self.y}), doublings, done
+        next_state = State(initial_conditions={'t': self.t, 'y': self.y}, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
 
-
-
+        return next_state, doublings, done
