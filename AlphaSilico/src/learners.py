@@ -158,8 +158,8 @@ class Agent:
         else:
             self.change_MCTS_root(state)
 
-        # Run MCTS
-        for sim in range(self.mcts_simulations):  # BUILDING MCTS TREE
+        # Fill the Monte Carlo tree
+        for sim in range(self.mcts_simulations):
             self.simulate()
 
         #  Get action values
@@ -210,7 +210,7 @@ class Agent:
         :param leaf: Node instance. Evaluate the leaf. If the simulation is not done, expand it as well.
         :param value: Float. Position estimation given by value head.
         :param done: Boolean. True if the node is a leaf.
-        :param breadcrumbs: List of Edge objects. Ordered list of visited edges during a call to move_to_leaf().
+        :param breadcrumbs: List of Edge objects. Ordered list of visited edges during a call to select().
         :return:
         """
 
@@ -278,13 +278,27 @@ class Agent:
     def predict(self, input_to_model):
         return self.brain.predict(input_to_model)
 
-    def simulate(self):
-        # Random walk to an existing leaf
-        leaf, value, done, breadcrumbs = self.mcts.move_to_leaf()  # Value == Y_true
+    def replay(self, lt_memory):
+        """
+        Fits the Learner to previous data.
+        :param lt_memory:
+        :return:
+        """
+        pass
 
-        # Evaluate and expand the leaf
+    def simulate(self):
+
+        """
+        Agent look-ahead using MCTS as per AlphaZero architecture. Repeated calls will fill the MC tree.
+        :return: Void.
+        """
+
+        # Select
+        leaf, value, done, breadcrumbs = self.mcts.select()  # Value == Y_true
+
+        # Evaluate and expand
         value, breadcrumbs = self.evaluate_expand(leaf, value, done, breadcrumbs)  # Value == Y_pred
 
-        # Backfill the value through the taken path
-        self.mcts.back_up(value, breadcrumbs)
+        # Backup
+        self.mcts.backup(value, breadcrumbs)
 

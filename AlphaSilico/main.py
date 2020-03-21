@@ -8,9 +8,8 @@ import pandas as pd
 
 # Local
 from AlphaSilico.src.printer import standard_treatment
-from AlphaSilico.src.insilico import Environment, State
+from AlphaSilico.src.insilico import Environment
 from AlphaSilico.src.learners import Learner, Agent
-from AlphaSilico.src.MCTS import MCTS, Node
 from AlphaSilico.src import config
 
 
@@ -24,13 +23,12 @@ treatment_start = 0  # Treatment start offset in days
 treatment_len = 75  # Treatment length in days
 observation_len = 90  # Observation period length, including treatment
 
-# Initialize the environment
+# Initialize the environment and agent
 environment = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
-
-X = [[np.arange(10)], [np.arange(28)]]
-
 agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
 
+
+# Testing
 agent.brain.plot_model()
 agent.build_MCTS_root(environment.state)
 
@@ -38,5 +36,11 @@ for x in range(3):
     agent.simulate()
 
 
+"""
+Potential vulnerabilites:
+    -Solver is deterministic but computer is imperfect. Simulating the same action twice on the same node might not result in states with exactly equal states.
+     Must find unique state ID
+        -patient params + t + treatment_history
+"""
 
 

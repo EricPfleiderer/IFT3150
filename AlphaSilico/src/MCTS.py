@@ -42,10 +42,10 @@ class Edge:
         self.action = action
 
         self.stats = {
-            'N': 0,
-            'W': 0,
-            'Q': 0,
-            'P': prior,
+            'N': 0,  # Visit count
+            'W': 0,  # Total action-value
+            'Q': 0,  # Mean action-value
+            'P': prior,  # Prior probability of choosing the move
         }
 
 
@@ -69,14 +69,13 @@ class MCTS:
         self.tree[node.id] = node
 
     @staticmethod
-    def back_up(value, breadcrumbs):
-
+    def backup(value, breadcrumbs):
         for edge in breadcrumbs:
             edge.stats['N'] = edge.stats['N'] + 1
             edge.stats['W'] = edge.stats['W'] + value
             edge.stats['Q'] = edge.stats['W'] / edge.stats['N']
 
-    def move_to_leaf(self):
+    def select(self):
 
         """
         Used to traverse a built MCTS tree a single time from root to leaf.
@@ -93,6 +92,7 @@ class MCTS:
 
             max_QU = -float('inf')  # 99999
 
+            # Adding Dirichlet noise to the root priors of the root node
             if current_node == self.root:
                 epsilon = config.EPSILON
                 nu = np.random.dirichlet([config.ALPHA] * len(current_node.edges))
