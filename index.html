@@ -31,6 +31,40 @@ Released   : 20110923
 		<div id="content">
 
 			<div class="post">
+				<h2 class="title"><a href="#">Implémentation du protocol AlphaZero</a></h2>
+				<p class="meta"><span class="date">20 mars 2020</span>
+				<div style="clear: both;">&nbsp;</div>
+				<div class="entry">
+
+					<p>La période de débuggage s'est terminée il y a environ une semaine; le modèle est maintenant cohérent et produit les résultats escomptés. À titre d'exemple,
+					on présente le résultat de deux simulations:</p>
+
+					<p><img src="images/post5/Objective.png" alt="Simply Easy Learning" width="500"></p>
+
+					<p> Les courbes à trait plein modélisent la croissance tumorale d'un patient non-traité, tandis que les courbes à trait pointillé modélisent plutôt la tumeur
+						d'un patient suivant une immunothérapie quotidienne et une virothérapie hebdomadaire. On remarque une décroissance de la taille de la tumeur qui coïncide
+						avec l'administration de la virothérapie. Sous certain conditions, la taille de la tumeur peut être réduite suffisament pour effectivement modéliser une
+						<i>guérison</i>.</p>
+
+					<p> Le <i>cumulative burden</i> représente le fardeau cumulatif de la tumeur sur le
+						patient et est obtenue en intégrant la taille de la tumeur dans le temps. Un terme additionnel sera bientôt ajouté pour incorporer le fardeau du
+						traitement.</p>
+
+					<p>Depuis quelques jours, les efforts sont redirigés vers l'implémentation du protocol AlphaZero. On introduit un prototype simple pour le réseau de
+						neurones employé par l'algorithme. </p>
+
+					<p><img src="images/post5/Model_graph.png" id="centered_model" alt="Simply Easy Learning" width="500"></p>
+
+					<p>Le réseau accepte deux entrées: les caractéristiques propres au patient et son état courant en terme de solution à notre système d'EDO. Ces entrées sont
+						concaténées et assimilées aux tronc du modèle, consistant de couches denses, de normalisations et d'activations non linéaires. Finalement, le
+						tronc donne lieu à deux têtes. Similairement à AlphaZero, elles se partagent les rôles de <i>policy head</i> et de <i>value head</i>. La sortie de la
+						<i>policy head</i> est une distribution de probabilités sur les coups légals, tandis que la sortie de la <i>value head</i> est un nombre réel et sert à
+						qualifier l'état courant du patient. L'heuristic précise utilisée pour l'implémentation du <i>value head</i>  est le prochain point important à considérer.
+					</p>
+				</div>
+			</div>
+
+			<div class="post">
 				<h2 class="title"><a href="#">Analyse des résultats et période débuggage</a></h2>
 				<p class="meta"><span class="date">2 mars 2020</span>
 				<div style="clear: both;">&nbsp;</div>

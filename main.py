@@ -1,1 +1,0 @@
-from AlphaZeroClinic import insilico
