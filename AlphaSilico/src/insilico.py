@@ -125,9 +125,8 @@ class State:  # Equivalent to GameState
     PSI12 = 5  # Cytokine production half effect  # MISSING IN MATLAB CODE ???
     gamma_P = 0.35  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, initial_conditions=None, dose_history=None, immunotherapy=None, virotherapy=None, treatment_start=0, treatment_len=75, observation_len=90, \
-                                                                                                                                                        immunotherapy_offset=1, virotherapy_offset=7,
-                 a1=1.183658646441553, a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
+    def __init__(self, initial_conditions=None, dose_history=None, immunotherapy=None, virotherapy=None, treatment_start=0, treatment_len=75, observation_len=90,
+                 immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553, a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
 
         """
         Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
@@ -174,7 +173,7 @@ class State:  # Equivalent to GameState
         self.kq = kq
         self.ks = kq
         self.k_cp = k_cp
-        self.variable_params = [self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp]
+        self.variable_params = (self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp)
 
         # Distribution specific parameters
         self.j = int(round(self.tau**2 / self.intermitotic_SD**2))  # Number of transit compartments
@@ -244,7 +243,7 @@ class State:  # Equivalent to GameState
         Convert current solution to string format to be used as keys in MCTS dictionnaries.
         :return: String. Representation of current solution.
         """
-        return np.array2string(self.y)
+        return 'p:' + ''.join(str(self.variable_params)) + 'i:' + np.array2string(self.immunotherapy) + 'v:' + np.array2string(self.virotherapy)
 
     def get_tumor_stats(self):
         non_resistant_cycle = self.y[0] + self.y[1] + self.y[self.j+6]  # Q, G1 and N
@@ -408,6 +407,8 @@ class State:  # Equivalent to GameState
         self.integrator.integrate(self.integrator.t + step_size)
         self.t, self.y = self.integrator.t, self.integrator.y
 
+        self.id = self.get_id()
+
     def get_available_actions(self, max_dose=4):
         """
         Check if allowed to medicate at current time (immunotherapy, virotherapy respectively).
@@ -430,26 +431,31 @@ class State:  # Equivalent to GameState
 
     def take_action(self, action):
 
-        # Modify treatment
-        if self.t < self.treatment_len:
-
-            # Add immunotherapy if needed
-            if round(self.t) % self.immunotherapy_offset == 0:
-                self._add_to_treatment(action[0], 'immunotherapy')
-
-            # Add virotherapy if needed
-            if round(self.t) % self.virotherapy_offset == 0:
-                self._add_to_treatment(action[1], 'virotherapy')
-
-        # Simulate a step in time
-        self._forward(step_size=1)
-
-        # Get tumor stats for value head target
-        _, doublings = self.get_tumor_stats()
-
         # Check for endgame
-        done = self.t >= self.observation_len
-
+        done = self.t >= self.treatment_len
+        value = 0  # If not terminal, return agnostic value ? HEURISTIC HERE
         next_state = State(initial_conditions={'t': self.t, 'y': self.y}, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
 
-        return next_state, doublings, done
+        # Run the rest of the simulation to get endgame statistics
+        if done and self.t < self.observation_len:
+            print('END OF SIMULATION')
+            self._forward(step_size=self.observation_len-self.treatment_len)
+            _, doublings = self.get_tumor_stats()
+            value = doublings < 15  # TEMPORARY TEST (model +1/-1 endstates)
+
+        else:
+            # Modify treatment
+            if self.t < self.treatment_len:
+
+                # Add immunotherapy if needed
+                if round(self.t) % self.immunotherapy_offset == 0:
+                    next_state._add_to_treatment(action[0], 'immunotherapy')
+
+                # Add virotherapy if needed
+                if round(self.t) % self.virotherapy_offset == 0:
+                    next_state._add_to_treatment(action[1], 'virotherapy')
+
+            # Simulate a step in time
+            next_state._forward(step_size=1)
+
+        return next_state, value, done
