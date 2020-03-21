@@ -117,8 +117,7 @@ class Learner:
 
     @staticmethod
     def convert_to_model_input(state):
-        return [[np.arange(10)], [np.arange(28)]]
-        # return np.array([[state.variable_params], [state.y]])
+        return [[state.variable_params], [state.y]]
 
 
 class Agent:
@@ -218,14 +217,16 @@ class Agent:
         if not done:
             value, probs, legal_actions = self.get_preds(leaf.state)  # Value head, policy head, legal actions
 
+            # Expand current leaf through all legal actions
             for idx, action in enumerate(legal_actions):
                 action = tuple(action)  # Prepare for use as indice
                 new_state, _, _ = leaf.state.take_action(action)
 
+                # If the state has not previously been visited, add it to the tree
                 if new_state.id not in self.mcts.tree:
                     node = Node(new_state)
                     self.mcts.add_node(node)
-                else:
+                else:  # SLOW!!! (recomputing previously visited edges is expensive)
                     node = self.mcts.tree[new_state.id]
                 new_edge = Edge(node, node, probs[action], action)
                 leaf.edges.append((action, new_edge))
@@ -255,7 +256,7 @@ class Agent:
         """
         Get model predictions under allowed actions constraints
         :param state: State instance. Current state to predict.
-        :return: Float, ndarray, ndarray. Predicted state value, probability map through action space, legal action map
+        :return: Float, ndarray, ndarray. Predicted state value, probability map, legal actions.
         """
 
         # Predict the leaf
@@ -268,33 +269,14 @@ class Agent:
         legal_meshgrid, legal_actions = state.get_available_actions(max_dose=4)  # Mask the illegal moves
         legal_policy = np.ones(shape=policy.shape) * -9999  # Squashing
         legal_policy[legal_meshgrid] = policy[legal_meshgrid]
-        probs = np.exp(legal_policy)
+        z = legal_policy-np.max(legal_policy)  # Avoid underflows by substracting max value
+        probs = np.exp(z)
         probs /= np.sum(probs)
 
         return value, probs, legal_actions
 
     def predict(self, input_to_model):
         return self.brain.predict(input_to_model)
-
-    def replay(self, ltmemory):
-
-        """
-        Fit the model on previous data stored in long term memory.
-        :param ltmemory: Memory object.
-        :return: Void.
-        """
-
-        for i in range(config.TRAINING_LOOPS):
-            minibatch = random.sample(ltmemory, min(config.BATCH_SIZE, len(ltmemory)))  # Sample mini batch from long term memory
-
-            training_states = np.array([self.brain.convert_to_model_input(row['state']) for row in minibatch])
-            training_targets = {'value_head': np.array([row['value'] for row in minibatch]), 'policy_head': np.array([row['AV'] for row in minibatch])}
-
-            fit = self.brain.fit(training_states, training_targets, epochs=config.EPOCHS, verbose=1, validation_split=0, batch_size=32)
-
-            self.train_overall_loss.append(round(fit.history['loss'][config.EPOCHS - 1], 4))
-            self.train_value_loss.append(round(fit.history['value_head_loss'][config.EPOCHS - 1], 4))
-            self.train_policy_loss.append(round(fit.history['policy_head_loss'][config.EPOCHS - 1], 4))
 
     def simulate(self):
         # Random walk to an existing leaf
