@@ -226,9 +226,9 @@ class Agent:
                 if new_state.id not in self.mcts.tree:
                     node = Node(new_state)
                     self.mcts.add_node(node)
-                else:  # SLOW!!! (recomputing previously visited edges is expensive)
+                else:  # SLOW!!! (recomputing previously visited edges is expensive) MUST REFACTOR IDs
                     node = self.mcts.tree[new_state.id]
-                new_edge = Edge(node, node, probs[action], action)
+                new_edge = Edge(leaf, node, probs[action], action)
                 leaf.edges.append((action, new_edge))
 
         return value, breadcrumbs
@@ -295,6 +295,8 @@ class Agent:
 
         # Select
         leaf, value, done, breadcrumbs = self.mcts.select()  # Value == Y_true
+
+        print('selected leaf depth', leaf.state.t)
 
         # Evaluate and expand
         value, breadcrumbs = self.evaluate_expand(leaf, value, done, breadcrumbs)  # Value == Y_pred

@@ -114,10 +114,13 @@ class MCTS:
 
                 Q = edge.stats['Q']
 
-                if Q + U > max_QU:
+                if Q + U > max_QU:  # Bias for first encounter if multiple max entries (all 0 for example)
                     max_QU = Q + U
                     simulation_action = action
                     simulation_edge = edge
+
+            if current_node == self.root:
+                print('Random root action:', simulation_action)
 
             new_state, value, done = current_node.state.take_action(simulation_action)  # value == y_test
             current_node = simulation_edge.node_out
