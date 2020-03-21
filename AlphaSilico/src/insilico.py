@@ -4,7 +4,7 @@ import numpy as np
 from scipy.integrate import ode, cumtrapz
 
 
-class Environment:
+class Environment:  # Equivalent to Game
 
     def __init__(self, treatment_start=0, treatment_len=75, observation_len=90, max_doses=4, immunotherapy_offset=1, virotherapy_offset=7):
 
@@ -26,14 +26,21 @@ class Environment:
         self.max_doses = max_doses
 
         # Initializations
-        self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, immunotherapy_offset=immunotherapy_offset, virotherapy_offset=virotherapy_offset)
+        self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, observation_len=observation_len, immunotherapy_offset=immunotherapy_offset,
+                           virotherapy_offset=virotherapy_offset)
         self.t = 0  # Current time in days
         self.dt = 1  # Step size in days
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = {'t': np.array([self.t]),
                         'y': np.array([self.state.initial_conditions])
                         }
-        self.allowed_actions = np.arange(max_doses)
+        self.dose_history = {'immunotherapy': {'t': [],
+                                               'y': [],
+                                               },
+                             'virotherapy': {'t': [],
+                                             'y': [],
+                                             }
+                             }
 
     def evaluate_obective(self):
 
@@ -60,11 +67,11 @@ class Environment:
                         'y': np.array([self.state.initial_conditions])
                         }
 
-    def step(self, actions=(0, 0), verbose=True):
+    def step(self, action=(0, 0), verbose=True):
 
         """
         A single call to this method will advance the state by dt and preserve history.
-        :param actions: Tuple of two ints. Dosage to be applied during the call. First entry corresponds to immunotherapy, second to virotherapy.
+        :param action: Tuple of two ints. Dosage to be applied during the call. First entry corresponds to immunotherapy, second to virotherapy.
         :param verbose: Boolean. Prints simulation progress if True.
         :return: State instance, Boolean. New state after call to step, boolean flag for endgame.
         """
@@ -74,37 +81,21 @@ class Environment:
             sys.stdout.write('Simulating... ' + str(round(self.t/self.observation_len*100, 1)) + '%')
             sys.stdout.flush()
 
-        # Modify treatment
-        if self.t < self.treatment_len:
-
-            # Add immunotherapy if needed
-            if round(self.t/self.dt) % (self.immunotherapy_offset/self.dt) == 0:
-                self.state.add_to_treatment(actions[0], 'immunotherapy')
-
-            # Add virotherapy if needed
-            if round(self.t/self.dt) % (self.virotherapy_offset/self.dt) == 0:
-                self.state.add_to_treatment(actions[1], 'virotherapy')
-
         # Simulate a time step
-        self.state.simulate(step_size=self.dt)
+        self.state, value, done = self.state.take_action(action)
 
         # Updates
         self.history['y'] = np.vstack((self.history['y'], self.state.y))
         self.history['t'] = np.append(self.history['t'], self.t)
         self.t, self.y = self.state.t, self.state.y
 
-        # Check for endgame
-        done = round(self.t / self.dt) >= round(self.observation_len / self.dt)
-
         if done and verbose:
             print('\n Simulating... done!')
-
-        value = 0  # TO DO: IMPLEMENT VALUE TRACKING
 
         return self.state, value, done
 
 
-class State:
+class State:  # Equivalent to GameState
 
     # Immunotherapy
     immunotherapy_admin = 125000  # Cytokine per unit volume
@@ -134,7 +125,7 @@ class State:
     PSI12 = 5  # Cytokine production half effect  # MISSING IN MATLAB CODE ???
     gamma_P = 0.35  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, treatment_start=0, treatment_len=75, immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553,
+    def __init__(self, initial_conditions=None, treatment_start=0, treatment_len=75, observation_len=90, immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553,
                  a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
 
         """
@@ -150,8 +141,9 @@ class State:
         :param k_cp: Float. Maximal phagocyte production rate (10**10 cells/day)
         """
 
-        self.treatment_len = treatment_len  # Treatment length in days
         self.treatment_start = treatment_start  # Treatment start time in days
+        self.treatment_len = treatment_len  # Treatment length in days
+        self.observation_len = observation_len  # Total expected simulation length in days
 
         # Treatment plan (no treatment by default)
         self.immunotherapy = np.array([])
@@ -176,6 +168,7 @@ class State:
         self.kq = kq
         self.ks = kq
         self.k_cp = k_cp
+        self.variable_params = [self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp]
 
         # Distribution specific parameters
         self.j = int(round(self.tau**2 / self.intermitotic_SD**2))  # Number of transit compartments
@@ -202,23 +195,28 @@ class State:
         self.total_cells = 200
 
         # Initial conditions
-        Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
-        G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
-        I = 0  # Infected cells
-        V = 0  # Virions
-        A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
-        N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
-        C = self.C_prod_homeo / self.k_elim  # Cytokines
-        P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
-        QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
-        G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
-        AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
-        NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
-        self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
+        if initial_conditions is None:
+            Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
+            G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
+            I = 0  # Infected cells
+            V = 0  # Virions
+            A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
+            N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
+            C = self.C_prod_homeo / self.k_elim  # Cytokines
+            P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
+            QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
+            G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
+            AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
+            NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
+            self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
+            self.t = 0
+        else:
+            self.initial_conditions = initial_conditions['y']
+            self.t = initial_conditions['t']
 
         # Simulation statistics
-        self.t = 0
-        self.y = self.initial_conditions
+        self.y = np.array(self.initial_conditions)
+        self.id = self.get_id()
 
         self.dose_history = {'immunotherapy': {'t': [],
                                                'y': [],
@@ -228,9 +226,10 @@ class State:
                                              }
                              }
 
+        self.integrator = None
+
         # Set integrator
-        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=5e-3)
-        self.integrator.set_initial_value(self.initial_conditions, self.t)  # Set initial conditions
+        self.integrator = ode(self._evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=5e-3)
 
     def get_id(self):
         """
@@ -238,6 +237,15 @@ class State:
         :return: String. Representation of current solution.
         """
         return np.array2string(self.y)
+
+    def get_tumor_stats(self):
+        non_resistant_cycle = self.y[0] + self.y[1] + self.y[self.j+6]  # Q, G1 and N
+        resistant_cycle = self.y[self.j+7] + self.y[self.j+8] + self.y[2*self.j+9]  # QR, G1R and NR
+        tumor_size = non_resistant_cycle + resistant_cycle + self.y[2]  # Infected cells
+
+        doublings = math.log2(tumor_size) - math.log2(self.total_cells)  # Number of doublings since beginning of treatment
+
+        return tumor_size, doublings
 
     def reset_integrator(self, nsteps=100000, max_steps=5e-3, atol=1e-8, rtol=1e-8):
         """
@@ -249,10 +257,10 @@ class State:
         :return: Void.
         """
 
-        self.integrator = ode(self.evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=atol, rtol=rtol, max_step=max_steps)
+        self.integrator = ode(self._evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=atol, rtol=rtol, max_step=max_steps)
         self.integrator.set_initial_value(self.y, self.t)  # Set initial conditions
 
-    def add_to_treatment(self, dosage, treatment_type):
+    def _add_to_treatment(self, dosage, treatment_type):
 
         """
         Used to add a dosage to immunotherapy or virotherapy treatments.
@@ -306,7 +314,7 @@ class State:
 
         return 0
 
-    def evaluate_derivatives(self, t, y):
+    def _evaluate_derivatives(self, t, y):
 
         """
         Returns the right hand side of our system of ODEs at time t, given previous solution y.
@@ -377,7 +385,7 @@ class State:
 
         return [dQ_dt, dG1_dt, dI_dt, dV_dt] + dA_dt + [dC_dt, dP_dt, dN_dt, dQR_dt, dG1R_dt] + dAR_dt + [dNR_dt]
 
-    def simulate(self, step_size=1):
+    def _simulate(self, step_size=1):
 
         """
         Simulate the model through time.
@@ -385,7 +393,56 @@ class State:
         :return: Numpy array. New solution.
         """
 
+        # Must reinitialize at each call (Isoda cannot integrate multiple problems simultaneously)
+        self.integrator.set_initial_value(self.y, self.t)  # Set initial conditions
+
+        # Integrate the solution
         self.integrator.integrate(self.integrator.t + step_size)
         self.t, self.y = self.integrator.t, self.integrator.y
 
-        return self.y
+    def get_available_actions(self, max_dose=4):
+        """
+        Check if allowed to medicate at current time (immunotherapy, virotherapy respectively).
+        :return: Tuple of Booleans.
+        """
+
+        # 0 doses allowed by default
+        possible_doses = [np.arange(1), np.arange(1)]
+
+        # Extend action space on administration days
+        if round(self.t) % self.immunotherapy_offset == 0:
+            possible_doses[0] = np.arange(max_dose+1)
+        if round(self.t) % self.virotherapy_offset == 0:
+            possible_doses[1] = np.arange(max_dose+1)
+
+        meshgrid = np.array(np.meshgrid(possible_doses[0], possible_doses[1]))
+        combinations = meshgrid.T.reshape(-1, 2)
+
+        return meshgrid, combinations
+
+    def take_action(self, action):
+
+        # Modify treatment
+        if self.t < self.treatment_len:
+
+            # Add immunotherapy if needed
+            if round(self.t) % self.immunotherapy_offset == 0:
+                self._add_to_treatment(action[0], 'immunotherapy')
+
+            # Add virotherapy if needed
+            if round(self.t) % self.virotherapy_offset == 0:
+                self._add_to_treatment(action[1], 'virotherapy')
+
+        # Simulate a step in time
+        self._simulate(step_size=1)
+
+        # Get tumor stats for value head target
+        _, doublings = self.get_tumor_stats()
+
+        # Check for endgame
+        done = self.t >= self.observation_len
+
+        return State(initial_conditions={'t': self.t, 'y': self.y}), doublings, done
+
+
+

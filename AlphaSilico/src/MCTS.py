@@ -13,7 +13,7 @@ class Node:
 
         """
         Node object in Monte Carlo Tree.
-        :param state: State instance.
+        :param state: state instance.
         """
 
         self.state = state
@@ -30,10 +30,10 @@ class Edge:
 
         """
         Edge object in Monte Carlo Tree.
-        :param node_in:
-        :param node_out:
-        :param prior:
-        :param action:
+        :param node_in: State instance. Parent.
+        :param node_out: State instance. Children.
+        :param prior: Float. Prior probabilities over actions.
+        :param action: List. Action space.
         """
 
         self.id = node_in.state.id + '|' + node_out.state.id
@@ -78,7 +78,12 @@ class MCTS:
 
     def move_to_leaf(self):
 
-        breadcrumbs = []
+        """
+        Used to traverse a built MCTS tree a single time from root to leaf.
+        :return: A leaf node. Returns root if it has no children.
+        """
+
+        breadcrumbs = []  # Ordered list of visited edges
         current_node = self.root
 
         done = 0
@@ -86,7 +91,7 @@ class MCTS:
 
         while not current_node.is_leaf():
 
-            maxQU = -float('inf')  # 99999
+            max_QU = -float('inf')  # 99999
 
             if current_node == self.root:
                 epsilon = config.EPSILON
@@ -102,18 +107,19 @@ class MCTS:
             simulation_action = None
             simulation_edge = None
 
+            # Choose action
             for idx, (action, edge) in enumerate(current_node.edges):
 
                 U = self.cpuct * ((1 - epsilon) * edge.stats['P'] + epsilon * nu[idx]) * np.sqrt(Nb) / (1 + edge.stats['N'])
 
                 Q = edge.stats['Q']
 
-                if Q + U > maxQU:
-                    maxQU = Q + U
+                if Q + U > max_QU:
+                    max_QU = Q + U
                     simulation_action = action
                     simulation_edge = edge
 
-            new_state, value, done = current_node.state.step(simulation_action)
+            new_state, value, done = current_node.state.take_action(simulation_action)  # value == y_test
             current_node = simulation_edge.node_out
             breadcrumbs.append(simulation_edge)
 
