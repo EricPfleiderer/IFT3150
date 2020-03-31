@@ -88,9 +88,12 @@ class MCTS:
         done = 0
         value = 0
 
-        while not current_node.is_leaf():
+        simulation_action = None
+        simulation_edge = None
 
-            max_QU = -float('inf')  # 99999
+        while not current_node.is_leaf() and not done:
+
+            max_QU = -float('inf')  #
 
             # Adding Dirichlet noise to the root priors of the root node
             if current_node == self.root:
@@ -104,9 +107,6 @@ class MCTS:
             for action, edge in current_node.edges:
                 Nb = Nb + edge.stats['N']
 
-            simulation_action = None
-            simulation_edge = None
-
             # Choose action
             for idx, (action, edge) in enumerate(current_node.edges):
 
@@ -119,12 +119,10 @@ class MCTS:
                     simulation_action = action
                     simulation_edge = edge
 
-            if current_node == self.root:
-                print('Random root action:', simulation_action)
+            current_node = simulation_edge.node_out  # Travel to the next node
+            breadcrumbs.append(simulation_edge)  # Keep track of visited edges
 
-            new_state, value, done = current_node.state.take_action(simulation_action)  # value == y_test
-            current_node = simulation_edge.node_out
-            breadcrumbs.append(simulation_edge)
+            new_state, value, done = current_node.state.take_action(simulation_action)  # Get statistics of the next leaf
 
         return current_node, value, done, breadcrumbs
 

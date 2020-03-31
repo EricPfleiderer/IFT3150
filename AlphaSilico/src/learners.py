@@ -226,8 +226,11 @@ class Agent:
                 if new_state.id not in self.mcts.tree:
                     node = Node(new_state)
                     self.mcts.add_node(node)
+
                 else:  # SLOW!!! (recomputing previously visited edges is expensive) MUST REFACTOR IDs
                     node = self.mcts.tree[new_state.id]
+
+                # Add newly expanded edge to the leaf
                 new_edge = Edge(leaf, node, probs[action], action)
                 leaf.edges.append((action, new_edge))
 
@@ -293,14 +296,16 @@ class Agent:
         :return: Void.
         """
 
-        # Select
+        # Select a leaf.
         leaf, value, done, breadcrumbs = self.mcts.select()  # Value == Y_true
 
-        print('selected leaf depth', leaf.state.t)
-
-        # Evaluate and expand
+        # Evaluate and expand if selected node is terminal.
         value, breadcrumbs = self.evaluate_expand(leaf, value, done, breadcrumbs)  # Value == Y_pred
 
-        # Backup
+        print('selected leaf depth', leaf.state.t)
+        print('path', [edge.action for edge in breadcrumbs])
+        print('value', value)
+
+        # Backup the value through the breadcrumbs
         self.mcts.backup(value, breadcrumbs)
 

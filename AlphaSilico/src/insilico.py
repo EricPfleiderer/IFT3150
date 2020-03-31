@@ -238,6 +238,9 @@ class State:  # Equivalent to GameState
         # Set integrator
         self.integrator = ode(self._evaluate_derivatives).set_integrator('lsoda', nsteps=100000, atol=1e-8, rtol=1e-8, max_step=5e-3)
 
+        self.end_game_value = None
+        self.end_game_state = None
+
     def get_id(self):
         """
         Convert current solution to string format to be used as keys in MCTS dictionnaries.
@@ -429,19 +432,30 @@ class State:  # Equivalent to GameState
 
         return meshgrid, combinations
 
+    def get_end_game(self):
+        next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
+                           observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
+        next_state._forward(step_size=self.observation_len - self.treatment_len)
+        tumor_size, doublings = next_state.get_tumor_stats()
+        self.end_game_value = doublings
+        self.end_game_state = next_state
+        return self.end_game_value, self.end_game_state
+
     def take_action(self, action):
 
         # Check for endgame
-        done = self.t >= self.treatment_len
         value = 0  # If not terminal, return agnostic value ? HEURISTIC HERE
-        next_state = State(initial_conditions={'t': self.t, 'y': self.y}, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
+        next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
+                           observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
+
+        done = self.t >= self.treatment_len  # check if next state is terminal
 
         # Run the rest of the simulation to get endgame statistics
-        if done and self.t < self.observation_len:
-            print('END OF SIMULATION')
-            self._forward(step_size=self.observation_len-self.treatment_len)
-            _, doublings = self.get_tumor_stats()
-            value = doublings < 15  # TEMPORARY TEST (model +1/-1 endstates)
+        if done:
+            if self.end_game_value is None and self.end_game_state is None:  # Save endgame statistics on first visit
+                value, next_state = self.get_end_game()
+            else:
+                value, next_state = self.end_game_value, self.end_game_state
 
         else:
             # Modify treatment
