@@ -248,6 +248,16 @@ class State:  # Equivalent to GameState
         """
         return 'p:' + ''.join(str(self.variable_params)) + 'i:' + np.array2string(self.immunotherapy) + 'v:' + np.array2string(self.virotherapy)
 
+    def get_next_id(self, action):
+        """
+        Get the ID of a child state without solving for solution.
+        :return: String. Representation of current solution.
+        """
+        next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
+                           observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
+        next_state._add_to_treatment(action)
+        return next_state.get_id()
+
     def get_tumor_stats(self):
         non_resistant_cycle = self.y[0] + self.y[1] + self.y[self.j+6]  # Q, G1 and N
         resistant_cycle = self.y[self.j+7] + self.y[self.j+8] + self.y[2*self.j+9]  # QR, G1R and NR
@@ -257,20 +267,7 @@ class State:  # Equivalent to GameState
 
         return tumor_size, doublings
 
-    def reset_integrator(self, nsteps=100000, max_steps=5e-3, atol=1e-8, rtol=1e-8):
-        """
-
-        :param nsteps: Int. Maximum number of calls before the solver quits.
-        :param max_steps: Float. Max step size the solver can take.
-        :param atol: Float. Absolute tolerance.
-        :param rtol: Float. Relative tolerance.
-        :return: Void.
-        """
-
-        self.integrator = ode(self._evaluate_derivatives).set_integrator('lsoda', nsteps=nsteps, atol=atol, rtol=rtol, max_step=max_steps)
-        self.integrator.set_initial_value(self.y, self.t)  # Set initial conditions
-
-    def _add_to_treatment(self, dosage, treatment_type):
+    def _add_to_treatment(self, action):
 
         """
         Used to add a dosage to immunotherapy or virotherapy treatments.
@@ -279,10 +276,24 @@ class State:  # Equivalent to GameState
         :return:
         """
 
-        treatment = getattr(self, treatment_type)  # Select appropriate treatment
-        offset = getattr(self, treatment_type + '_offset')  # Select appropriate offset
-        setattr(self, treatment_type, np.append(treatment, dosage))  # Add dose to treatment plan
-        setattr(self, 't_' + treatment_type + '_admin', np.arange(treatment.size+1) * offset + self.treatment_start)  # Update admninistration times to cover new treatmant plan
+        # Only prescribe is still in treatment
+        if self.t < self.treatment_len:
+
+            # Add immunotherapy according to offset
+            if round(self.t) % self.immunotherapy_offset == 0:
+                self.immunotherapy = np.append(self.immunotherapy, action[0])
+                self.t_immunotherapy_admin = np.arrange(self.immunotherapy.size) * self.immunotherapy_offset + self.treatment_start
+
+            # Add virotherapy according to offset
+            if round(self.t) % self.virotherapy_offset == 0:
+                self.virotherapy = np.append(self.virotherapy, action[1])
+                self.t_virotherapy_admin = np.arange(self.virotherapy.size) * self.virotherapy_offset + self.treatment_start
+
+        # Simulate a step in time
+        # treatment = getattr(self, treatment_type)  # Select appropriate treatment
+        # offset = getattr(self, treatment_type + '_offset')  # Select appropriate offset
+        # setattr(self, treatment_type, np.append(treatment, dosage))  # Add dose to treatment plan
+        # setattr(self, 't_' + treatment_type + '_admin', np.arange(treatment.size+1) * offset + self.treatment_start)  # Update admninistration times to cover new treatmant plan
 
     def dose(self, t, treatment_type):
 
@@ -290,9 +301,6 @@ class State:  # Equivalent to GameState
         Returns dose of a defined treatment to be administered at time t.
 
         VULNERABILITY: Decay terms at t in t_admin are unsteady due to finite solver steps. Solver must use small steps around t_admin. Suggested 5e-3 and smaller.
-
-        TO DO:
-            - Implement detection event (first passes through t_admin) to dynamically rescale step size.
 
         :param t: Float. Current time in days.
         :param treatment_type: String. Either 'immunotherapy' or 'virotherapy'
@@ -432,22 +440,25 @@ class State:  # Equivalent to GameState
 
         return meshgrid, combinations
 
-    def get_end_game(self):
+    def get_end_game(self, treshold=8):
         next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
                            observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
         next_state._forward(step_size=self.observation_len - self.treatment_len)
         tumor_size, doublings = next_state.get_tumor_stats()
-        self.end_game_value = doublings
+        if doublings <= treshold:
+            self.end_game_value = 1  # Win
+        else:
+            self.end_game_value = -1  # Lose
         self.end_game_state = next_state
         return self.end_game_value, self.end_game_state
 
     def take_action(self, action):
 
-        # Check for endgame
-        value = 0  # If not terminal, return agnostic value ? HEURISTIC HERE
+        value = 0
         next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
                            observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
 
+        # Check for endgame
         done = self.t >= self.treatment_len  # check if next state is terminal
 
         # Run the rest of the simulation to get endgame statistics
@@ -458,18 +469,8 @@ class State:  # Equivalent to GameState
                 value, next_state = self.end_game_value, self.end_game_state
 
         else:
-            # Modify treatment
-            if self.t < self.treatment_len:
-
-                # Add immunotherapy if needed
-                if round(self.t) % self.immunotherapy_offset == 0:
-                    next_state._add_to_treatment(action[0], 'immunotherapy')
-
-                # Add virotherapy if needed
-                if round(self.t) % self.virotherapy_offset == 0:
-                    next_state._add_to_treatment(action[1], 'virotherapy')
-
-            # Simulate a step in time
+            # Modify treatment and step through time
+            next_state._add_to_treatment(action)
             next_state._forward(step_size=1)
 
         return next_state, value, done

@@ -110,11 +110,11 @@ class MCTS:
             # Choose action
             for idx, (action, edge) in enumerate(current_node.edges):
 
-                U = self.cpuct * ((1 - epsilon) * edge.stats['P'] + epsilon * nu[idx]) * np.sqrt(Nb) / (1 + edge.stats['N'])
+                U = self.cpuct * ((1 - epsilon) * edge.stats['P'] + epsilon * nu[idx]) * np.sqrt(Nb) / (1 + edge.stats['N'])  # Exploration term
 
-                Q = edge.stats['Q']
+                Q = edge.stats['Q']  # Exploitation term
 
-                if Q + U > max_QU:  # Bias for first encounter if multiple max entries (all 0 for example)
+                if Q + U > max_QU:  # Systematic bias for first encounter (>) or last encounter (>=) if multiple max entries (initializations to 0)
                     max_QU = Q + U
                     simulation_action = action
                     simulation_edge = edge
@@ -122,7 +122,8 @@ class MCTS:
             current_node = simulation_edge.node_out  # Travel to the next node
             breadcrumbs.append(simulation_edge)  # Keep track of visited edges
 
-            new_state, value, done = current_node.state.take_action(simulation_action)  # Get statistics of the next leaf
+            # Get statistics of the next leaf
+            new_state, value, done = current_node.state.take_action(simulation_action)  # (SLOW), CAN CHECK IF DONE AND RETURN 0 IF NOT INSTEAD OF SIMULATING
 
         return current_node, value, done, breadcrumbs
 
