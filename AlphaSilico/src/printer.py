@@ -1,9 +1,91 @@
 # Third Party
 import numpy as np
 import matplotlib.pyplot as plt
+from importlib import reload
 
 # Local
 from AlphaSilico.src.insilico import Environment
+from AlphaSilico.src.learners import Learner, Agent
+from AlphaSilico.src import config
+
+
+def MCTS_variance(simulations=250, runs=5):
+    # Environment parameters
+    treatment_start = 0  # Treatment start offset in days
+    treatment_len = 10  # Treatment length in days
+    observation_len = 180  # Observation period length, including treatment
+
+    MC_tree_sizes = []
+
+    for i in range(runs):
+
+        environment = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
+        agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
+        agent.build_MCTS_root(environment.state)
+
+        MC_tree_size = []
+
+        for j in range(simulations):
+            agent.simulate()
+            MC_tree_size.append(len(agent.mcts.tree))
+
+        MC_tree_sizes.append(MC_tree_size)
+
+    MC_tree_sizes = np.array(MC_tree_sizes)
+
+    plt.figure()
+    plt.errorbar(x=np.arange(0, MC_tree_sizes.shape[1]), y=np.sum(MC_tree_sizes), yerr=np.std(MC_tree_sizes))
+    plt.xlabel('Number of simulations')
+    plt.ylabel('Tree size')
+    plt.savefig('outputs/MCTS_analysis_variance.png')
+
+
+def MCTS_params(simulations=200):
+    # Environment parameters
+    treatment_start = 0  # Treatment start offset in days
+    treatment_len = 10  # Treatment length in days
+    observation_len = 180  # Observation period length, including treatment
+
+    # Avg MC tree size vs simulations, varying CPUCT, EPSILON, ALPHA
+
+    test_params = {'CPUCT': (0.1, 1, 10),
+                   'EPSILON': (0.01, 0.1, 0.8),
+                   'ALPHA': (0.1, 0.8, 10)
+                   }
+
+    colors = ((0.8, 0, 0), (0, 0.8, 0), (0, 0, 0.8))
+
+    for param_name, param_values in test_params.items():
+        print('Analysing ', param_name, '...')
+
+        MC_tree_sizes = []
+
+        for param_value in param_values:
+
+            setattr(config, param_name, param_value)
+
+            environment = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
+            agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
+            agent.build_MCTS_root(environment.state)
+
+            MC_tree_size = []
+
+            for x in range(simulations):
+                if x % 50 == 0:
+                    print('Simulation #', x)
+                agent.simulate()
+                MC_tree_size.append(len(agent.mcts.tree))
+
+            MC_tree_sizes.append(MC_tree_size)
+            reload(config)
+
+        plt.figure()
+        for idx, MC_tree_size in enumerate(MC_tree_sizes):
+            plt.plot(np.arange(len(MC_tree_size)), MC_tree_size, c=colors[idx], label=param_name+' = '+str(param_values[idx]))
+        plt.xlabel('Number of simulations')
+        plt.ylabel('Tree size')
+        plt.legend()
+        plt.savefig('outputs/MCTS_analysis_' + param_name + '.png')
 
 
 def standard_treatment():
