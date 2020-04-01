@@ -61,7 +61,7 @@ class Learner:
         x = Dense(10, kernel_regularizer=l2())(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
-        value_head = Dense(self.value_size, use_bias=False, activation='linear', kernel_regularizer=l2(), name='value_head')(x)
+        value_head = Dense(self.value_size, use_bias=False, activation='tanh', kernel_regularizer=l2(), name='value_head')(x)
         return value_head
 
     def _policy_head(self, x):
@@ -302,9 +302,9 @@ class Agent:
         # Evaluate and expand if selected node is terminal.
         value, breadcrumbs = self.evaluate_expand(leaf, value, done, breadcrumbs)  # Value == Y_pred
 
-        print('selected leaf depth', leaf.state.t)
-        print('path', [edge.action for edge in breadcrumbs])
-        print('value', value)
+        # print('selected leaf depth', leaf.state.t)
+        # print('path', [edge.action for edge in breadcrumbs])
+        # print('value', value)
 
         # Backup the value through the breadcrumbs
         self.mcts.backup(value, breadcrumbs)
