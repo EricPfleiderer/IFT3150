@@ -2,11 +2,13 @@ import math
 import sys
 import numpy as np
 from scipy.integrate import ode, cumtrapz
+from AlphaSilico.src import config
 
 
 class Environment:  # Equivalent to Game
 
-    def __init__(self, treatment_start=0, treatment_len=75, observation_len=90, max_doses=4, immunotherapy_offset=1, virotherapy_offset=7):
+    def __init__(self, params=config.DEFAULT_PARAMS, treatment_start=config.TREATMENT_START, treatment_len=config.TREATMENT_LEN, observation_len=config.OBSERVATION_LEN,
+                 max_doses=config.MAX_DOSES, immunotherapy_offset=config.IMMUNOTHERAPY_OFFSET, virotherapy_offset=config.VIROTHERAPY_OFFSET):
 
         """
         This class serves as an interface between the State class and the Agent class.
@@ -24,9 +26,10 @@ class Environment:  # Equivalent to Game
         self.immunotherapy_offset = immunotherapy_offset
         self.virotherapy_offset = virotherapy_offset
         self.max_doses = max_doses
+        self.params = params
 
         # Initializations
-        self.state = State(treatment_start=treatment_start, treatment_len=treatment_len, observation_len=observation_len, immunotherapy_offset=immunotherapy_offset,
+        self.state = State(params=params, treatment_start=treatment_start, treatment_len=treatment_len, observation_len=observation_len, immunotherapy_offset=immunotherapy_offset,
                            virotherapy_offset=virotherapy_offset)
         self.t = 0  # Current time in days
         self.dt = 1  # Step size in days
@@ -60,14 +63,15 @@ class Environment:  # Equivalent to Game
         Resets the environment for new simulations.
         :return: Void.
         """
-        self.state = State(treatment_start=0, treatment_len=self.treatment_len, immunotherapy_offset=self.immunotherapy_offset, virotherapy_offset=self.virotherapy_offset)
+        self.state = State(params=self.params, treatment_start=0, treatment_len=self.treatment_len, immunotherapy_offset=self.immunotherapy_offset,
+                           virotherapy_offset=self.virotherapy_offset)
         self.t = 0
         self.y = np.array(self.state.initial_conditions)  # Current solution
         self.history = {'t': np.array([self.t]),
                         'y': np.array([self.state.initial_conditions])
                         }
 
-    def step(self, action=(0, 0), verbose=True):
+    def step(self, action):
 
         """
         A single call to this method will advance the state by dt and preserve history.
@@ -76,11 +80,6 @@ class Environment:  # Equivalent to Game
         :return: State instance, Boolean. New state after call to step, boolean flag for endgame.
         """
 
-        if verbose:
-            sys.stdout.write('\r')
-            sys.stdout.write('Simulating... ' + str(round(self.t/self.observation_len*100, 1)) + '%')
-            sys.stdout.flush()
-
         # Simulate a time step
         self.state, value, done = self.state.take_action(action)
 
@@ -88,9 +87,6 @@ class Environment:  # Equivalent to Game
         self.history['y'] = np.vstack((self.history['y'], self.state.y))
         self.history['t'] = np.append(self.history['t'], self.t)
         self.t, self.y = self.state.t, self.state.y
-
-        if done and verbose:
-            print('\n Simulating... done!')
 
         return self.state, value, done
 
@@ -125,8 +121,9 @@ class State:  # Equivalent to GameState
     PSI12 = 5  # Cytokine production half effect  # MISSING IN MATLAB CODE ???
     gamma_P = 0.35  # From Barrish 2017 PNAS elimination rate of phagocyte
 
-    def __init__(self, initial_conditions=None, dose_history=None, immunotherapy=None, virotherapy=None, treatment_start=0, treatment_len=75, observation_len=90,
-                 immunotherapy_offset=1, virotherapy_offset=7, a1=1.183658646441553, a2=1.758233712464858, d1=0, d2=0.539325116600707, kp=0.05, kq=10, k_cp=4.6754):
+    def __init__(self, params=(1.183658646441553, 1.758233712464858, 0, 0.539325116600707, 0.539325116600707, (33.7/24 - 1/1.758233712464858), 0.05, 10, 10, 4.6754),
+                 initial_conditions=None, dose_history=None, immunotherapy=None, virotherapy=None, treatment_start=0, treatment_len=75, observation_len=90,
+                 immunotherapy_offset=1, virotherapy_offset=7, ):
 
         """
         Initializes a system of ordinary differential equations and an integrator to simulate and solve a melanoma tumor growth. Model by Craig & Cassidy.
@@ -163,16 +160,16 @@ class State:  # Equivalent to GameState
         self.t_virotherapy_admin = np.arange(self.virotherapy.size) * self.virotherapy_offset + treatment_start
 
         # Variable patient parameters
-        self.a1 = a1
-        self.a2 = a2
-        self.d1 = d1
-        self.d2 = d2
-        self.d3 = d2
-        self.tau = (33.7/24 - 1/a2)
-        self.kp = kp
-        self.kq = kq
-        self.ks = kq
-        self.k_cp = k_cp
+        self.a1 = params[0]
+        self.a2 = params[1]
+        self.d1 = params[2]
+        self.d2 = params[3]
+        self.d3 = self.d2
+        self.tau = (33.7/24 - 1/self.a2)
+        self.kp = params[6]
+        self.kq = params[7]
+        self.ks = self.kq
+        self.k_cp = params[9]
         self.variable_params = (self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp)
 
         # Distribution specific parameters
@@ -201,16 +198,16 @@ class State:  # Equivalent to GameState
 
         # Initial conditions
         if initial_conditions is None:
-            Q = (1 / a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
-            G1 = (1 / (a2 + d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
+            Q = (1 / self.a1 / self.total_time) * self.total_cells * (1 - self.nu)  # Quiescent
+            G1 = (1 / (self.a2 + self.d2) / self.total_time) * self.total_cells * (1 - self.nu)  # G1
             I = 0  # Infected cells
             V = 0  # Virions
             A = (self.tau / self.total_time) * self.total_cells * (1 - self.nu) * np.ones(self.j) / self.j  # Transit compartments (1 to N)
             N = (self.tau / self.total_time) * self.total_cells * (1 - self.nu)  # Total number of cells in cycle
             C = self.C_prod_homeo / self.k_elim  # Cytokines
             P = self.k_cp * C / ((self.PSI12 + C) * self.gamma_P)  # Phagocytes
-            QR = (1 / a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
-            G1R = (1 / (a2 + d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
+            QR = (1 / self.a1 / self.total_time) * self.total_cells * self.nu  # Resistant quiescent
+            G1R = (1 / (self.a2 + self.d2) / self.total_time) * self.total_cells * self.nu  # Resistant G1
             AR = (self.tau / self.total_time) * self.total_cells * self.nu * np.ones(self.j) / self.j  # Resistant transitcompartments (1 to N)
             NR = (self.tau / self.total_time) * self.total_cells * self.nu  # Total number resistant cells in cycle
             self.initial_conditions = [Q, G1, I, V] + A.tolist() + [C, P, N, QR, G1R] + AR.tolist() + [NR]  # Length 28 with N = 9
@@ -282,7 +279,7 @@ class State:  # Equivalent to GameState
             # Add immunotherapy according to offset
             if round(self.t) % self.immunotherapy_offset == 0:
                 self.immunotherapy = np.append(self.immunotherapy, action[0])
-                self.t_immunotherapy_admin = np.arrange(self.immunotherapy.size) * self.immunotherapy_offset + self.treatment_start
+                self.t_immunotherapy_admin = np.arange(self.immunotherapy.size) * self.immunotherapy_offset + self.treatment_start
 
             # Add virotherapy according to offset
             if round(self.t) % self.virotherapy_offset == 0:

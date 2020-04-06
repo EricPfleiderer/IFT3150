@@ -13,6 +13,7 @@ from AlphaSilico.src.insilico import State
 from AlphaSilico.src import config
 from scipy.integrate import ode, cumtrapz
 
+
 class Losses:
 
     @staticmethod
@@ -148,7 +149,7 @@ class Agent:
         self.val_value_loss = []
         self.val_policy_loss = []
 
-    def act(self, state, tau):
+    def act(self, state, after_tau0, tau):
 
         # Build a new tree if the state is not previously visited
         if self.mcts is None or state.id not in self.mcts.tree:
@@ -160,17 +161,18 @@ class Agent:
 
         # Fill the Monte Carlo tree
         for sim in range(self.mcts_simulations):
+            print(sim)
             self.simulate()
 
-        #  Get action values
-        pi, values = self.get_action_values(1)  # Deterministic play
+        # Get Monte Carlo statistics
+        pi, values = self.get_action_values(tau=tau)
 
-        # Pick the action
-        action, value = self.choose_action(pi, values, tau)
+        # Pick the action to play
+        action, value = self.choose_action(pi, values, after_tau0=after_tau0)
 
-        next_state, _, _ = state.step(action)
-
-        NN_value = -self.get_preds(next_state)[0]
+        # Play the action and get the output of value head for the next state
+        next_state, _, _ = state.take_action(action)
+        NN_value, _, _ = self.get_preds(next_state)
 
         return action, pi, value, NN_value
 
@@ -187,17 +189,18 @@ class Agent:
         self.mcts.root = self.mcts.tree[state.id]
 
     @staticmethod
-    def choose_action(pi, values, tau):
+    def choose_action(pi, values, after_tau0):
 
         # Deterministic play
-        if tau == 0:
+        if after_tau0:
             actions = np.argwhere(pi == max(pi))
-            action = random.choice(actions)[0]
+            action = np.random.choice(actions)[0]
 
-        # Random play
+        # Random playnp.where(action_idx == 1)[1][0]
         else:
-            action_idx = np.random.multinomial(1, pi)
-            action = np.where(action_idx == 1)[0][0]
+            flat_pi = pi.flatten()
+            action_idx = np.random.multinomial(1, flat_pi).reshape(pi.shape)
+            action = (np.where(action_idx == 1)[0][0], np.where(action_idx == 1)[1][0])
 
         value = values[action]
 
@@ -239,20 +242,21 @@ class Agent:
     def get_action_values(self, tau):
 
         """
-        Get the output of the value head for each possible move.
+        Get values of each move and their probability to be played according to MCTS simulation.
         :param tau: Int. Turns before deterministic play.
-        :return:
+        :return: 2D numpy arrays. Values and probabilities.
         """
 
         edges = self.mcts.root.edges
-        pi = np.zeros(self.action_size, dtype=np.integer)
-        values = np.zeros(self.action_size, dtype=np.float32)
+        pi = np.zeros((config.MAX_DOSES+1, config.MAX_DOSES+1), dtype=np.integer)
+        values = np.zeros((config.MAX_DOSES+1, config.MAX_DOSES+1), dtype=np.float32)
 
         for action, edge in edges:
             pi[action] = pow(edge.stats['N'], 1 / tau)
             values[action] = edge.stats['Q']
 
-        pi = pi / (np.sum(pi) * 1.0)
+        pi = pi / (np.sum(pi))  # Convert to probability (SOFTMAX)
+
         return pi, values
 
     def get_preds(self, state):
@@ -301,10 +305,6 @@ class Agent:
 
         # Evaluate and expand if selected node is terminal.
         value, breadcrumbs = self.evaluate_expand(leaf, value, done, breadcrumbs)  # Value == Y_pred
-
-        # print('selected leaf depth', leaf.state.t)
-        # print('path', [edge.action for edge in breadcrumbs])
-        # print('value', value)
 
         # Backup the value through the breadcrumbs
         self.mcts.backup(value, breadcrumbs)

@@ -1,13 +1,72 @@
 import pickle
 from shutil import copyfile
 from importlib import reload
+import numpy as np
 
 from AlphaSilico.src import settings, config
 from AlphaSilico.src.learners import Learner, Agent
 from AlphaSilico.src.memory import Memory
+from AlphaSilico.src.insilico import Environment
 
 
-def compete(agent1, agent2, episodes, turns_until_tau0, memory=None):
+def clinical_trial(agent, memory=None, turns_until_tau0=config.TURNS_UNTIL_TAU0, cohort_size=config.EPISODES):
+    """
+    Perform a clinical trial using an agent. Returns trial statistics.
+    :param agent: Agent instance. Self learning agent to be evaluated.
+    :param memory: Memory instance.
+    :param turns_until_tau0: Int. Turn at which agent starts playing deterministically.
+    :param cohort_size: Integer. Size of cohort during trial.
+    :return: Clinical trial statistics.
+    """
+
+    # Load default parameters
+    cohort_params = np.array([config.DEFAULT_PARAMS])
+
+    # Patient params are within 10% of default values 99.7% of the time according to normal distribution.
+    if cohort_size != 1:
+        cohort_params = np.random.normal(config.DEFAULT_PARAMS, config.DEFAULT_PARAMS/30, size=cohort_size)
+
+    stats = {'z': [],
+             'v': [],
+             }
+
+    for params in cohort_params:
+
+        trial = Environment(params=params, treatment_start=config.TREATMENT_START, treatment_len=config.TREATMENT_LEN, observation_len=config.OBSERVATION_LEN,
+                            max_doses=config.MAX_DOSES, immunotherapy_offset=config.IMMUNOTHERAPY_OFFSET, virotherapy_offset=config.VIROTHERAPY_OFFSET)
+
+        done = False
+        while not done:
+
+            # Select an action
+            after_tau0 = int(trial.t) > config.TURNS_UNTIL_TAU0  # Check if agent should play randomly or deterministically
+            action, pi, MCTS_value, NN_value = agent.act(trial.state, after_tau0=after_tau0, tau=config.TAU)
+
+            # Play the chosen action
+            next_state, value, done = trial.step(action)
+
+            # Get endgame statistics
+            if done:
+                stats['z'].append(MCTS_value)
+                stats['v'].append(NN_value)
+
+        trial.reset()
+
+    return stats
+
+
+def compete(first_agent, second_agent, episodes, turns_until_tau0, memory=None):
+
+    """
+    Put two agents into competition. Each agent must complete a clinical trial.
+    :param first_agent:
+    :param second_agent:
+    :param episodes:
+    :param turns_until_tau0:
+    :param memory:
+    :return:
+    """
+
     return 0, Memory(memory_size=config.MEMORY_SIZE), 0, 0
 
 
@@ -21,14 +80,7 @@ def train():
         memory = pickle.load(open(settings.archive_folder + 'Model_' + str(settings.INITIAL_RUN_NUMBER) + "/memory" + str(settings.INITIAL_MEMORY_VERSION).zfill(4) +
                                   ".p", "rb"))
 
-    # Environment parameters
-    treatment_start = 0  # Treatment start offset in days
-    treatment_len = 75  # Treatment length in days
-    observation_len = 180  # Observation period length, including treatment
-
-    # Initialize the environment and agent
-    environment = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
-
+    # Agents
     current_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
     best_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
 
