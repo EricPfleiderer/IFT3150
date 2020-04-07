@@ -118,7 +118,9 @@ class Learner:
 
     @staticmethod
     def convert_to_model_input(state):
-        return [[state.variable_params], [state.y]]
+        params_array = [state.variable_params]
+        y_array = [state.y]
+        return [params_array, y_array]
 
 
 class Agent:
@@ -161,7 +163,6 @@ class Agent:
 
         # Fill the Monte Carlo tree
         for sim in range(self.mcts_simulations):
-            print(sim)
             self.simulate()
 
         # Get Monte Carlo statistics
@@ -193,10 +194,11 @@ class Agent:
 
         # Deterministic play
         if after_tau0:
-            actions = np.argwhere(pi == max(pi))
-            action = np.random.choice(actions)[0]
+            actions = np.argwhere(pi == np.max(pi))
+            random_idx = np.random.randint(0, actions.shape[0])  # Select random maximum if more than one exists
+            action = (actions[random_idx][0], actions[random_idx][1])
 
-        # Random playnp.where(action_idx == 1)[1][0]
+        # Random play
         else:
             flat_pi = pi.flatten()
             action_idx = np.random.multinomial(1, flat_pi).reshape(pi.shape)
@@ -272,7 +274,7 @@ class Agent:
         value = preds[0][0][0]  # Float value (axis1=output, axis2=example, axis3=feature)
         policy = preds[1][0]
 
-        # Convert prediction to probability (SOFTMAX)
+        # Convert prediction to probability (SOFTMAX)model_input
         legal_meshgrid, legal_actions = state.get_available_actions(max_dose=4)  # Mask the illegal moves
         legal_policy = np.ones(shape=policy.shape) * -9999  # Squashing
         legal_policy[legal_meshgrid] = policy[legal_meshgrid]
@@ -287,11 +289,29 @@ class Agent:
 
     def replay(self, lt_memory):
         """
-        Fits the Learner to previous data.
+        Fits the Agent to stored data.
         :param lt_memory:
         :return:
         """
-        pass
+
+        for i in range(config.TRAINING_LOOPS):
+            minibatch = random.sample(lt_memory, min(config.BATCH_SIZE, len(lt_memory)))
+
+            # Build training examples
+            training_states = [[], []]
+            for example in minibatch:
+                training_states[0].append(example['params'])
+                training_states[1].append(example['y'])
+
+            # Build training targets
+            training_targets = {'value_head': np.array([example['value'] for example in minibatch]),
+                                'policy_head': np.array([example['pi'] for example in minibatch])}
+
+            fit = self.brain.fit(training_states, training_targets, epochs=config.EPOCHS, verbose=1, validation_split=0, batch_size=32)
+
+            self.train_overall_loss.append(round(fit.history['loss'][config.EPOCHS - 1], 4))
+            self.train_value_loss.append(round(fit.history['value_head_loss'][config.EPOCHS - 1], 4))
+            self.train_policy_loss.append(round(fit.history['policy_head_loss'][config.EPOCHS - 1], 4))
 
     def simulate(self):
 

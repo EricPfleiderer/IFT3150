@@ -5,7 +5,7 @@ from scipy.integrate import ode, cumtrapz
 from AlphaSilico.src import config
 
 
-class Environment:  # Equivalent to Game
+class Environment:
 
     def __init__(self, params=config.DEFAULT_PARAMS, treatment_start=config.TREATMENT_START, treatment_len=config.TREATMENT_LEN, observation_len=config.OBSERVATION_LEN,
                  max_doses=config.MAX_DOSES, immunotherapy_offset=config.IMMUNOTHERAPY_OFFSET, virotherapy_offset=config.VIROTHERAPY_OFFSET):
@@ -91,7 +91,7 @@ class Environment:  # Equivalent to Game
         return self.state, value, done
 
 
-class State:  # Equivalent to GameState
+class State:
 
     # Immunotherapy
     immunotherapy_admin = 125000  # Cytokine per unit volume
@@ -170,7 +170,7 @@ class State:  # Equivalent to GameState
         self.kq = params[7]
         self.ks = self.kq
         self.k_cp = params[9]
-        self.variable_params = (self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp)
+        self.variable_params = [self.a1, self.a2, self.d1, self.d2, self.d3, self.tau, self.kp, self.kq, self.ks, self.k_cp]
 
         # Distribution specific parameters
         self.j = int(round(self.tau**2 / self.intermitotic_SD**2))  # Number of transit compartments

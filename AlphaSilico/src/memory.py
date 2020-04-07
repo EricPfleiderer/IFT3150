@@ -15,11 +15,11 @@ class Memory:
         self.ltmemory = deque(maxlen=memory_size)
         self.stmemory = deque(maxlen=memory_size)
 
-    def commit_stmemory(self, identities, state, action_values):
-        for r in identities(state, action_values):
-            self.stmemory.append({'state': r[0],
-                                  'AV': r[1]
-                                  })
+    def commit_stmemory(self, params, y, pi):
+        self.stmemory.append({'params': params,
+                              'y': y,
+                              'pi': pi,
+                              })
 
     def commit_ltmemory(self):
         for i in self.stmemory:

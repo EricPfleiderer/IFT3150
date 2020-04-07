@@ -1,4 +1,6 @@
 import pickle
+from copy import deepcopy
+import sys
 from shutil import copyfile
 from importlib import reload
 import numpy as np
@@ -9,105 +11,127 @@ from AlphaSilico.src.memory import Memory
 from AlphaSilico.src.insilico import Environment
 
 
-def clinical_trial(agent, memory=None, turns_until_tau0=config.TURNS_UNTIL_TAU0, cohort_size=config.EPISODES):
+def clinical_trial(agent, turns_until_tau0, memory=None, episodes=config.EPISODES):
     """
     Perform a clinical trial using an agent. Returns trial statistics.
     :param agent: Agent instance. Self learning agent to be evaluated.
     :param memory: Memory instance.
     :param turns_until_tau0: Int. Turn at which agent starts playing deterministically.
-    :param cohort_size: Integer. Size of cohort during trial.
+    :param episodes: Integer. Number of trials performed.
     :return: Clinical trial statistics.
     """
 
-    # Load default parameters
-    cohort_params = np.array([config.DEFAULT_PARAMS])
+    # # Load default parameters
+    # cohort_params = np.array([config.DEFAULT_PARAMS])
 
-    # Patient params are within 10% of default values 99.7% of the time according to normal distribution.
-    if cohort_size != 1:
-        cohort_params = np.random.normal(config.DEFAULT_PARAMS, config.DEFAULT_PARAMS/30, size=cohort_size)
+    # # Patient params are within 10% of default values 99.7% of the time according to normal distribution. NOT YET FUNCTIONAL, NEED DYNAMIC NEURAL NET INPUT
+    # if cohort_size != 1:
+    #     cohort_params = np.random.multivariate_normal(cohort_params[0], np.diag(cohort_params[0]/30), size=cohort_size)
 
-    stats = {'z': [],
+    stats = {'score': [],
              'v': [],
              }
 
-    for params in cohort_params:
+    params = config.DEFAULT_PARAMS
+
+    for episode in range(episodes):
 
         trial = Environment(params=params, treatment_start=config.TREATMENT_START, treatment_len=config.TREATMENT_LEN, observation_len=config.OBSERVATION_LEN,
                             max_doses=config.MAX_DOSES, immunotherapy_offset=config.IMMUNOTHERAPY_OFFSET, virotherapy_offset=config.VIROTHERAPY_OFFSET)
 
+        print('EPISODE:', episode)
+
         done = False
+        turn = 0
         while not done:
 
+            if turn % 10 == 0:
+                print('Day...', turn)
+
             # Select an action
-            after_tau0 = int(trial.t) > config.TURNS_UNTIL_TAU0  # Check if agent should play randomly or deterministically
+            after_tau0 = turns_until_tau0 > 0  # Check if agent should play randomly or deterministically
             action, pi, MCTS_value, NN_value = agent.act(trial.state, after_tau0=after_tau0, tau=config.TAU)
+
+            # Commit the move to memory
+            if memory is not None:
+                memory.commit_stmemory(params=params, y=trial.state.y, pi=pi)
 
             # Play the chosen action
             next_state, value, done = trial.step(action)
+            turn += 1
 
             # Get endgame statistics
             if done:
-                stats['z'].append(MCTS_value)
-                stats['v'].append(NN_value)
+                stats['score'].append(value)  # Save score (-1, 1)
+
+                # Propagate z through path taken in MC tree
+                if memory is not None:
+                    for move in memory.stmemory:
+                        move['value'] = value
+
+                    memory.commit_ltmemory()  # Commit to long term and clear short term for next trial
 
         trial.reset()
 
-    return stats
-
-
-def compete(first_agent, second_agent, episodes, turns_until_tau0, memory=None):
-
-    """
-    Put two agents into competition. Each agent must complete a clinical trial.
-    :param first_agent:
-    :param second_agent:
-    :param episodes:
-    :param turns_until_tau0:
-    :param memory:
-    :return:
-    """
-
-    return 0, Memory(memory_size=config.MEMORY_SIZE), 0, 0
+    return stats, memory
 
 
 def train():
 
-    # Load memory if necessary
-    if settings.INITIAL_MEMORY_VERSION is None:
-        memory = Memory(config.MEMORY_SIZE)
-    else:
-        print('LOADING MEMORY VERSION ' + str(settings.INITIAL_MEMORY_VERSION) + '...')
-        memory = pickle.load(open(settings.archive_folder + 'Model_' + str(settings.INITIAL_RUN_NUMBER) + "/memory" + str(settings.INITIAL_MEMORY_VERSION).zfill(4) +
-                                  ".p", "rb"))
+    """
+    Main training loop for AlphaSilico reinforcment agent.
+    :return: Void.
+    """
+
+    # Training memory
+    memory = Memory(config.MEMORY_SIZE)
 
     # Agents
     current_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
     best_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
 
     iteration = 0
+    best_player_version = 0
 
     while 1:
+
+        print('---------------------------------------------------------------------------------------------------------')
+        print('ITERATION: ', iteration)
 
         iteration += 1
         reload(config)
 
-        # SELF PLAY (filling memory)
-        _, memory, _, _ = compete(best_agent, best_agent, config.EPISODES, turns_until_tau0=config.TURNS_UNTIL_TAU0, memory=memory)
+        print('FILLING MEMORY...')
 
+        # Self play (filling memory, semi-random play)
+        _, memory = clinical_trial(best_agent, turns_until_tau0=config.TURNS_UNTIL_TAU0-iteration, memory=memory, episodes=config.EPISODES)
+
+        # Once the memory is full...
         if len(memory.ltmemory) >= config.MEMORY_SIZE:
+
+            print('FITTING AGENT...')
 
             # Fit the current agent on the long term memory
             current_agent.replay(memory.ltmemory)
 
-            # Save memory every now and then (more recent memory is higher quality)
+            # Save memory every now and then (recent memory is higher quality)
             if iteration % 5 == 0:
                 pickle.dump(memory, open(settings.run_folder + 'Model_' + str(settings.INITIAL_RUN_NUMBER) + "/memory" + str(iteration).zfill(4) + ".p", "wb"))
 
-            # Score the agents in a competition
-            scores, _, points, sp_scores = compete(best_agent, current_agent, config.EVAL_EPISODES, turns_until_tau0=0, memory=None)
+            # Score the agents in a competition (deterministic play)
+            print('SCORING CURRENT AGENT...')
+            current_stats, _ = clinical_trial(agent=current_agent, turns_until_tau0=0, memory=None, episodes=config.EVAL_EPISODES)
+            print('SCORING BEST AGENT...')
+            best_stats, _ = clinical_trial(agent=best_agent, turns_until_tau0=0, memory=None, episodes=config.EVAL_EPISODES)
 
             # Update best agent if needed
-            # if scores['current_player'] > scores['best_player'] * config.SCORING_THRESHOLD:
-            #     best_player_version = best_player_version + 1
-            #     best_NN.model.set_weights(current_NN.model.get_weights())
-            #     best_NN.write(initialise.INITIAL_RUN_NUMBER, best_player_version)
+            if np.sum(current_stats['score']) > best_stats['score'] * config.SCORING_THRESHOLD:
+                print('BETTER AGENT FOUND! SAVING...')
+                best_player_version = best_player_version + 1
+                best_agent.brain = deepcopy(current_agent.brain)  # Deep copy the current brain since it scored higher
+                pickle.dump(best_agent, open(settings.run_folder + 'Model_' + str(settings.INITIAL_RUN_NUMBER) + "/model" + str(iteration).zfill(4) + ".p", "wb"))
+
+        else:
+            print('MEMORY SIZE:', len(memory.ltmemory))
+
+

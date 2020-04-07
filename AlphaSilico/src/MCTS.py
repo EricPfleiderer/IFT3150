@@ -123,7 +123,7 @@ class MCTS:
             breadcrumbs.append(simulation_edge)  # Keep track of visited edges
 
             # Get statistics of the next leaf
-            new_state, value, done = current_node.state.take_action(simulation_action)  # (SLOW), CAN CHECK IF DONE AND RETURN 0 IF NOT INSTEAD OF SIMULATING
+            new_state, value, done = current_node.state.take_action(simulation_action)  # (SLOW)
 
         return current_node, value, done, breadcrumbs
 

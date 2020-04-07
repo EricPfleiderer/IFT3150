@@ -6,7 +6,7 @@ Settings related to model saving and loading.
 import os
 
 # Training initialization
-INITIAL_RUN_NUMBER = None
+INITIAL_RUN_NUMBER = 1
 INITIAL_MODEL_VERSION = None
 INITIAL_MEMORY_VERSION = None
 
