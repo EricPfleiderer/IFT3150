@@ -87,8 +87,8 @@ def train():
     memory = Memory(config.MEMORY_SIZE)
 
     # Agents
-    current_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
-    best_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=1e-3))
+    current_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=config.LEARNING_RATE))
+    best_agent = Agent('Singularity', 4, config.MCTS_SIMS, config.CPUCT, Learner(learning_rate=config.LEARNING_RATE))
 
     iteration = 0
     best_player_version = 0
@@ -121,11 +121,13 @@ def train():
             # Score the agents in a competition (deterministic play)
             print('SCORING CURRENT AGENT...')
             current_stats, _ = clinical_trial(agent=current_agent, turns_until_tau0=0, memory=None, episodes=config.EVAL_EPISODES)
+            print('SCORE:', current_stats['score'])
             print('SCORING BEST AGENT...')
             best_stats, _ = clinical_trial(agent=best_agent, turns_until_tau0=0, memory=None, episodes=config.EVAL_EPISODES)
+            print('SCORE:', best_stats['score'])
 
             # Update best agent if needed
-            if np.sum(current_stats['score']) > best_stats['score'] * config.SCORING_THRESHOLD:
+            if np.sum(current_stats['score']) > np.sum(best_stats['score']) * config.SCORING_THRESHOLD:
                 print('BETTER AGENT FOUND! SAVING...')
                 best_player_version = best_player_version + 1
                 best_agent.brain = deepcopy(current_agent.brain)  # Deep copy the current brain since it scored higher

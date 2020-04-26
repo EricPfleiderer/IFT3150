@@ -23,6 +23,11 @@ from AlphaSilico.src.training import clinical_trial, train
 train()
 
 '''
+
+DEBUG:
+    -MCTS should not use done condition, only is_leaf()
+        -expande/evaluate should deal with done condition (only expand if not done)
+
 TO DO:
     - Implement dynamic input size for solution vector.  Learner currently initializes with fixed input size, cannot deal with patients with varying tau parameter
         -When done, remove cohort_size=1 from clinical_trial() calls.

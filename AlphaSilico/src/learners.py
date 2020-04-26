@@ -232,7 +232,7 @@ class Agent:
                     node = Node(new_state)
                     self.mcts.add_node(node)
 
-                else:  # SLOW!!! (recomputing previously visited edges is expensive) MUST REFACTOR IDs
+                else:  # SLOW!!! (recomputing previously visited edges is expensive) MUST REFACTOR IDs, why would we ever enter this condition..? bug..
                     node = self.mcts.tree[new_state.id]
 
                 # Add newly expanded edge to the leaf

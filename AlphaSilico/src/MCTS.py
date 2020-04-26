@@ -91,7 +91,7 @@ class MCTS:
         simulation_action = None
         simulation_edge = None
 
-        while not current_node.is_leaf() and not done:
+        while not current_node.is_leaf() and not done:  # not done condition should not be necessary? bug if removed..
 
             max_QU = -float('inf')  #
 
@@ -123,7 +123,12 @@ class MCTS:
             breadcrumbs.append(simulation_edge)  # Keep track of visited edges
 
             # Get statistics of the next leaf
-            new_state, value, done = current_node.state.take_action(simulation_action)  # (SLOW)
+            new_state, value, done = current_node.state.take_action(simulation_action)  # (SLOW) FIX: create is_done() and next_is_done() methods!
+
+            # next_done = current_node.state.next_is_done()
+
+        # if simulation_action is not None:
+        #     new_state, value, done = current_node.state.take_action(simulation_action)  # uncomment once solution is implemented
 
         return current_node, value, done, breadcrumbs
 

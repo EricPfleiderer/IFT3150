@@ -437,7 +437,7 @@ class State:
 
         return meshgrid, combinations
 
-    def get_end_game(self, treshold=8):
+    def get_end_game(self, treshold=7):
         next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
                            observation_len=self.observation_len, immunotherapy=self.immunotherapy, virotherapy=self.virotherapy, dose_history=self.dose_history)
         next_state._forward(step_size=self.observation_len - self.treatment_len)
