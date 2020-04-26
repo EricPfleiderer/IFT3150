@@ -71,7 +71,7 @@ class Environment:
                         'y': np.array([self.state.initial_conditions])
                         }
 
-    def step(self, action):
+    def step(self, action, check_for_endgame=True):
 
         """
         A single call to this method will advance the state by dt and preserve history.
@@ -81,7 +81,7 @@ class Environment:
         """
 
         # Simulate a time step
-        self.state, value, done = self.state.take_action(action)
+        self.state, value, done = self.state.take_action(action, check_for_endgame)
 
         # Updates
         self.history['y'] = np.vstack((self.history['y'], self.state.y))
@@ -449,7 +449,7 @@ class State:
         self.end_game_state = next_state
         return self.end_game_value, self.end_game_state
 
-    def take_action(self, action):
+    def take_action(self, action, check_for_endgame=True):
 
         value = 0
         next_state = State(initial_conditions={'t': self.t, 'y': self.y}, treatment_start=self.treatment_start, treatment_len=self.treatment_len,
@@ -459,7 +459,7 @@ class State:
         done = self.t >= self.treatment_len  # check if next state is terminal
 
         # Run the rest of the simulation to get endgame statistics
-        if done:
+        if done and check_for_endgame:
             if self.end_game_value is None and self.end_game_state is None:  # Save endgame statistics on first visit
                 value, next_state = self.get_end_game()
             else:

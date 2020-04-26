@@ -91,7 +91,7 @@ def MCTS_params(simulations=200):
 def standard_treatment():
 
     # Simulation and treatment parameters
-    min_doses = 0
+    min_doses = 4
     max_doses = 4
     treatment_start = 0
     treatment_len = 75  # Treatment length in days
@@ -107,7 +107,7 @@ def standard_treatment():
         actions = (0, 0)
         if day < treatment_len:
             actions = (treatment[day][0], treatment[day][1])
-        env.step(actions)
+        env.step(actions, check_for_endgame=False)
 
     tumor_size, cumulative_tumor_burden = env.evaluate_obective()  # Compute the objective function from the history
 
@@ -115,7 +115,7 @@ def standard_treatment():
     control = Environment(treatment_len=treatment_len, observation_len=observation_len, treatment_start=treatment_start)
     for _ in range(observation_len):
         actions = (0, 0)
-        control.step(actions)
+        control.step(actions, check_for_endgame=False)
     control_size, control_ctb = control.evaluate_obective()
 
     print('Plotting...')

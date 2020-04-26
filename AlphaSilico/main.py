@@ -20,7 +20,7 @@ from AlphaSilico.src.training import clinical_trial, train
 
 # agent = Agent(name='Brain', action_size=5, mcts_simulations=config.MCTS_SIMS, cpuct=config.CPUCT, learner=Learner(learning_rate=config.LEARNING_RATE))
 
-train()
+# train()
 
 '''
 
